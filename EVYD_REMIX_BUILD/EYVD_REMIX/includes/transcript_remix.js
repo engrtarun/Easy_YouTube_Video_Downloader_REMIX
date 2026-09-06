@@ -1082,51 +1082,8 @@
         }
     }
 
-    // Detect lyrics or substantial transcript-like text in the video description
-    function getLyricsOrDescriptionText() {
-        const descEl = document.querySelector('#description-inline-expander, ytd-watch-metadata #description, #description');
-        if (!descEl) return null;
-        const text = (descEl.innerText || descEl.textContent || '').trim();
-        if (!text || text.length < 40) return null;
-        
-        const lower = text.toLowerCase();
-        const hasLyricsKeywords = lower.includes('lyrics') || lower.includes('(verse') || lower.includes('(hook') || lower.includes('(chorus') || lower.includes('written by:') || lower.includes('performed by:');
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        
-        const isLikelyLyrics = hasLyricsKeywords || (lines.length >= 8 && lines.some(l => l.length < 60));
-        if (isLikelyLyrics) {
-            return {
-                hasLyrics: true,
-                text: text
-            };
-        }
-        return null;
-    }
+    // Lyrics guessing removed - honest status only
 
-    function showLyricsToast(lyricsText) {
-        showToastNotification(
-            "📝 Video me official transcript nahi mila, par Description me Lyrics mili hain!",
-            9000,
-            "📋 Copy Lyrics",
-            (btn) => {
-                navigator.clipboard.writeText(lyricsText).then(() => {
-                    btn.textContent = "✓ Copied!";
-                    btn.style.background = "#006600";
-                    setTimeout(dismissToastNotification, 2000);
-                }).catch(() => {
-                    const ta = document.createElement('textarea');
-                    ta.value = lyricsText;
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                    btn.textContent = "✓ Copied!";
-                    btn.style.background = "#006600";
-                    setTimeout(dismissToastNotification, 2000);
-                });
-            }
-        );
-    }
     
     // ============================================================
     // SHORTS: Fallback Modal when API captions are restricted or unavailable
@@ -1445,15 +1402,9 @@
             }
         }
         
-        // Layer 3: No captions exist on YouTube (e.g. Mr Bean silent clip, or Raja Kumari lyrics)
+        // Layer 3: Honest status - No captions exist on YouTube
         dismissToastNotification();
-        
-        const lyricsData = getLyricsOrDescriptionText();
-        if (lyricsData && lyricsData.hasLyrics) {
-            showLyricsToast(lyricsData.text);
-        } else {
-            showToastNotification("ℹ️ Is video ke liye YouTube par koi Transcript ya Subtitles available nahi hai (Silent / Music video).", 5000);
-        }
+        showToastNotification("ℹ️ Is video ke liye YouTube par koi Transcript ya Subtitles available nahi hai.", 4000);
     }
 
     // ============================================================
