@@ -184,6 +184,7 @@
             return { status: 'error', reason: e.message, videoId };
         }
     }
+    window.eyvdFetchTranscript = fetchTranscriptFromAPI;
     
     // ============================================================
     // CORE: Open YouTube's official transcript panel (normal videos only)
