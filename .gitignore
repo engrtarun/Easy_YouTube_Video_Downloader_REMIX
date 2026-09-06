@@ -1,0 +1,6 @@
+# Scratch and debug profiles
+scratch/
+*.log
+.tempmediaStorage/
+panel_normal.jpg
+panel_responsive.jpg

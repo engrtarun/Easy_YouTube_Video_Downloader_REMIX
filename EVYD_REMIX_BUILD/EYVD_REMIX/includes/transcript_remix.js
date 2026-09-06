@@ -1533,6 +1533,11 @@
                     injectShortsTranscriptButton();
                 }
                 
+                // Trigger Description & SEO Inspector Panel
+                if (window.eyvdInjectInspector) {
+                    try { window.eyvdInjectInspector(); } catch(e) {}
+                }
+                
                 // Detect URL changes (SPA navigation)
                 if (lastUrl !== window.location.href) {
                     lastUrl = window.location.href;
@@ -1543,6 +1548,9 @@
                         } else {
                             injectCopyButton();
                             checkAutoOpenTranscript();
+                            if (window.eyvdInjectInspector) {
+                                try { window.eyvdInjectInspector(); } catch(e) {}
+                            }
                         }
                     }, 300);
                 }
@@ -1555,11 +1563,15 @@
         // Continuous 800ms interval check:
         // - In Shorts: ensures Transcript button is injected
         // - In Normal videos: ensures Copy Transcript green button is injected when panel opens
+        // - In Description: ensures Description Inspector Panel is mounted
         setInterval(() => {
             if (window.location.pathname.includes('/shorts/')) {
                 injectShortsTranscriptButton();
             } else {
                 injectCopyButton();
+                if (window.eyvdInjectInspector) {
+                    try { window.eyvdInjectInspector(); } catch(e) {}
+                }
             }
         }, 800);
     }
@@ -1576,6 +1588,9 @@
                 } else {
                     injectCopyButton();
                     checkAutoOpenTranscript();
+                    if (window.eyvdInjectInspector) {
+                        try { window.eyvdInjectInspector(); } catch(e) {}
+                    }
                 }
             }, 600);
         });
@@ -1587,6 +1602,9 @@
                 } else {
                     injectCopyButton();
                     checkAutoOpenTranscript();
+                    if (window.eyvdInjectInspector) {
+                        try { window.eyvdInjectInspector(); } catch(e) {}
+                    }
                 }
             }, 500);
         });
@@ -1620,6 +1638,9 @@
         setupMessageListener();
         setupNavigationListener();
         checkAutoOpenTranscript();
+        if (window.eyvdInjectInspector) {
+            try { window.eyvdInjectInspector(); } catch(e) {}
+        }
     });
     
 })();
