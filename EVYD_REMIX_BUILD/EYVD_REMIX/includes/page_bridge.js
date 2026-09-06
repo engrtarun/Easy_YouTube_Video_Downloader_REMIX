@@ -18,8 +18,10 @@
         let stats = null;
         let currentQuality = null;
         let availableQualities = [];
-        let glCountry = null;
+        let channelCountry = null;
         let subscribers = null;
+        let channelId = null;
+        let channelUrl = null;
 
         try {
             const player = document.getElementById('movie_player');
@@ -46,13 +48,21 @@
             pr = window.ytInitialPlayerResponse;
         }
 
-        // Extract country code from YouTube cfg
+        if (pr) {
+            channelId = pr.videoDetails?.channelId || null;
+            channelUrl = pr.microformat?.playerMicroformatRenderer?.ownerProfileUrl || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
+        }
+
+        // Extract TRUE channel country from ytInitialData (channel about / view model)
         try {
-            if (window.ytcfg && typeof window.ytcfg.get === 'function') {
-                glCountry = window.ytcfg.get('GL') || window.ytcfg.get('INNERTUBE_CONTEXT_GL') || null;
-            }
-            if (!glCountry && window.ytcfg?.data_?.GL) {
-                glCountry = window.ytcfg.data_.GL;
+            if (window.ytInitialData) {
+                const dataStr = JSON.stringify(window.ytInitialData);
+                const mCountry = dataStr.match(/"channelAboutFullMetadataRenderer":\s*\{[^}]+"country":\s*\{\s*"simpleText":\s*"([^"]+)"/i)
+                              || dataStr.match(/"aboutChannelViewModel":\s*\{[^}]+"country":\s*"([^"]+)"/i)
+                              || dataStr.match(/"channelMetadataRenderer":\s*\{[^}]+"country":\s*"([^"]+)"/i);
+                if (mCountry && mCountry[1]) {
+                    channelCountry = mCountry[1].trim();
+                }
             }
         } catch (e) { }
 
@@ -65,14 +75,11 @@
                        || dataStr.match(/"([0-9.,KMBkmb]+\s+subscribers?)"/i);
                 if (m && m[1]) {
                     subscribers = m[1].replace(/subscribers?/i, '').trim();
-                    if (!subscribers.toLowerCase().includes('sub')) {
-                        subscribers += ' Subscribers';
-                    }
                 }
             }
         } catch (e) { }
 
-        return { pr, vd, stats, currentQuality, availableQualities, glCountry, subscribers };
+        return { pr, vd, stats, currentQuality, availableQualities, channelCountry, subscribers, channelId, channelUrl };
     }
 
     function dispatchData(source, targetVid) {
@@ -92,8 +99,10 @@
             stats: data.stats,
             currentQuality: data.currentQuality,
             availableQualities: data.availableQualities,
-            glCountry: data.glCountry,
-            subscribers: data.subscribers
+            channelCountry: data.channelCountry,
+            subscribers: data.subscribers,
+            channelId: data.channelId,
+            channelUrl: data.channelUrl
         };
 
         try {
@@ -115,8 +124,10 @@
                     stats: data.stats ? { bandwidth_kbps: data.stats.bandwidth_kbps, resolution: data.stats.resolution } : null,
                     currentQuality: data.currentQuality,
                     availableQualities: data.availableQualities,
-                    glCountry: data.glCountry,
-                    subscribers: data.subscribers
+                    channelCountry: data.channelCountry,
+                    subscribers: data.subscribers,
+                    channelId: data.channelId,
+                    channelUrl: data.channelUrl
                 });
                 window.dispatchEvent(new CustomEvent('eyvd_player_data_response_str', {
                     detail: safePayload
