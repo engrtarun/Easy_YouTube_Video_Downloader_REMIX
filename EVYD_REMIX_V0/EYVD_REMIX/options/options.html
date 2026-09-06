@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EYVD Remix - Options</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 40px 20px;
+            display: flex;
+            gap: 30px;
+        }
+
+        /* Glassmorphism Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: fit-content;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding: 0 8px;
+        }
+
+        .brand img {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+        }
+
+        .brand h1 {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 32px;
+            position: relative;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 24px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        /* Settings Form Elements */
+        .setting-group {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .setting-group h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+        }
+
+        .setting-group p {
+            margin: 0 0 16px 0;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Switch */
+        .switch-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 12px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: .3s;
+            border-radius: 34px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--text-muted);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);
+            background-color: white;
+        }
+
+        /* Inputs & Buttons */
+        input[type="text"], input[type="email"] {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--panel-border);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, input[type="email"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--panel-border);
+        }
+        
+        button.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .actions {
+            margin-top: 32px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #status {
+            color: var(--success);
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        /* Markdown-style content */
+        .markdown-body {
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+        
+        .markdown-body h3 {
+            color: #f8fafc;
+            margin-top: 24px;
+        }
+        
+        .markdown-body p {
+            margin-bottom: 16px;
+        }
+        
+        .markdown-body ul {
+            padding-left: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .markdown-body li {
+            margin-bottom: 8px;
+        }
+        
+        .markdown-body code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #60a5fa;
+        }
+        
+        .feature-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 16px;
+        }
+        
+        .feature-icon {
+            font-size: 24px;
+            background: rgba(59, 130, 246, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <div class="brand">
+                <img src="../icons/icon128.png" alt="EYVD Logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzNiODJmNiIvPjwvc3ZnPg=='">
+                <h1>EYVD Remix</h1>
+            </div>
+            
+            <div class="nav-item active" data-tab="settings">
+                <span>⚙️</span> Settings
+            </div>
+            <div class="nav-item" data-tab="features">
+                <span>✨</span> Features Guide
+            </div>
+            <div class="nav-item" data-tab="manual">
+                <span>📖</span> User Manual
+            </div>
+            <div class="nav-item" data-tab="backup">
+                <span>💾</span> Backup & Restore
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content">
+            <form id="optionsForm">
+                
+                <!-- Settings Tab -->
+                <div class="tab-pane active" id="settings">
+                    <h2>Extension Settings</h2>
+                    
+                    <div class="setting-group">
+                        <label class="switch-label">
+                            <div class="switch">
+                                <input type="checkbox" id="autoplay">
+                                <span class="slider"></span>
+                            </div>
+                            <div>
+                                <h3>Autoplay Video Downloads</h3>
+                                <p style="margin:0;">Automatically start downloading videos when clicking quick links.</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="setting-group">
+                        <label class="switch-label">
+                            <div class="switch">
+                                <input type="checkbox" id="notification">
+                                <span class="slider"></span>
+                            </div>
+                            <div>
+                                <h3>Disable Notifications</h3>
+                                <p style="margin:0;">Turn off extension update and download notifications.</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="setting-group">
+                        <h3>Pro User Key / Email</h3>
+                        <p>If you have a pro account, enter your registered email address here.</p>
+                        <input type="email" id="prokey" placeholder="you@example.com">
+                        <div id="emailError" style="color: var(--danger); font-size: 12px; margin-top: 8px; display: none;">Invalid email address.</div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit">Save Changes</button>
+                        <span id="status">Options saved successfully!</span>
+                    </div>
+                </div>
+
+                <!-- Features Guide Tab -->
+                <div class="tab-pane" id="features">
+                    <h2>Features Guide</h2>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <div>
+                            <h3>Shorts Transcript Extraction</h3>
+                            <p>Seamlessly view transcripts for YouTube Shorts. We inject a slick, dark-themed Transcript button right next to the Like/Dislike actions on Shorts. No more struggling to read fast-paced text!</p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">⌨️</div>
+                        <div>
+                            <h3>Alt + T Shortcut</h3>
+                            <p>Press <code>Alt + T</code> on any YouTube video (Shorts or Normal) to instantly toggle the transcript view. It's built for power users who want keyboard-first navigation.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">📋</div>
+                        <div>
+                            <h3>One-Click Copy & Download</h3>
+                            <p>In both Shorts and Normal videos, use our injected "Copy Transcript" buttons to instantly copy the entire script to your clipboard, or download it as a <code>.txt</code> file.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">🎨</div>
+                        <div>
+                            <h3>Dark Theme First</h3>
+                            <p>Our custom UI elements (like the Shorts transcript popup) are built with modern glassmorphism and deep dark themes to blend perfectly with YouTube's cinematic mode.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Manual Tab -->
+                <div class="tab-pane markdown-body" id="manual">
+                    <h2>User Manual</h2>
+                    
+                    <h3>How to use Shorts Transcripts</h3>
+                    <ol>
+                        <li>Navigate to any YouTube Short.</li>
+                        <li>Look at the right-side vertical panel (where Like, Dislike, and Share are).</li>
+                        <li>Click the new <strong>Transcript</strong> button.</li>
+                        <li>A popup will appear with the full transcript. Use the <strong>Copy</strong> or <strong>Download</strong> buttons inside the popup.</li>
+                    </ol>
+
+                    <h3>How to use Transcripts on Normal Videos</h3>
+                    <ol>
+                        <li>Open any standard YouTube video.</li>
+                        <li>Press <code>Alt + T</code> on your keyboard.</li>
+                        <li>The native YouTube transcript panel will open on the right side.</li>
+                        <li>Look at the top of the panel for our custom green <strong>Copy Transcript ▼</strong> button.</li>
+                        <li>Click it to choose between copying just the text, or the text with timestamps.</li>
+                    </ol>
+                    
+                    <h3>Troubleshooting</h3>
+                    <p>If buttons are not appearing:</p>
+                    <ul>
+                        <li>Ensure you are not on a very old version of YouTube layout.</li>
+                        <li>Try refreshing the page (<code>F5</code> or <code>Ctrl+R</code>).</li>
+                        <li>Check if another YouTube extension is conflicting with the layout.</li>
+                    </ul>
+                </div>
+
+                <!-- Backup Tab -->
+                <div class="tab-pane" id="backup">
+                    <h2>Backup & Restore Settings</h2>
+                    <p class="markdown-body">You can export your configuration to a JSON file to transfer to another browser, or import a previously saved configuration.</p>
+                    
+                    <div class="setting-group" style="display: flex; gap: 16px; align-items: center; justify-content: space-between;">
+                        <div>
+                            <h3>Export Settings</h3>
+                            <p style="margin:0;">Save your current settings as a JSON file.</p>
+                        </div>
+                        <button type="button" id="exportBtn" class="secondary">⬇️ Export JSON</button>
+                    </div>
+                    
+                    <div class="setting-group" style="display: flex; gap: 16px; align-items: center; justify-content: space-between;">
+                        <div>
+                            <h3>Import Settings</h3>
+                            <p style="margin:0;">Load settings from a JSON file.</p>
+                        </div>
+                        <input type="file" id="importFile" accept=".json" style="display: none;">
+                        <button type="button" id="importBtn" class="secondary">⬆️ Import JSON</button>
+                    </div>
+                    
+                    <div id="backupStatus" style="color: var(--success); font-size: 14px; font-weight: 500; opacity: 0; transition: opacity 0.3s; text-align: right;">Action successful!</div>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "assets/icons/icon-128.png",
+         "16": "assets/icons/icon-16.png",
+         "48": "assets/icons/icon-48.png"
+      },
+      "default_popup": "src/popup/popup.html"
+   },
+   "background": {
+      "service_worker": "src/background/background.js"
+   },
+   "content_scripts": [ {
+      "js": [ "src/content/content.js" ],
+      "matches": [ "*://www.youtube.com/*" ]
+   } ],
+   "description": "Download transcripts from YouTube videos in text and JSON formats.",
+   "icons": {
+      "128": "assets/icons/icon-128.png",
+      "16": "assets/icons/icon-16.png",
+      "48": "assets/icons/icon-48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxSuFJcDRfk40jPSXX9pQ9zIPrSrDNJcjj44WD99Tule0Qr9I+77WZ6pE9q8+G9QtCLWcypYUcU1QqsPA9fh/IfNxCeS5CCIli2USKEGljtxzK6b2OxFEO+58CetpgVhXwwKJKmxT6KSOFPSnmVt2FwMnTbBBIHrgoalb23d4kbJce/REyCt6xDZ2yAuY28qGSYqIjopFP359NgUABZtv+KnCsRQhPjcvXL57TTxqp/X/Dck6gPQzxuaGqUDzZ38QN6rZDOfGFz1r2FV+aD5HfiNZnAE0HFVOdJvDpeJhghz5QnWFp6Ub6MOHsz37KOg5lquEDOFU9G8rA3fpbnhAZwIDAQAB",
+   "manifest_version": 3,
+   "name": "YouTube Transcript Downloader",
+   "permissions": [ "activeTab", "scripting", "downloads", "tabs" ],
+   "update_url": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+   "version": "1.0"
+}
