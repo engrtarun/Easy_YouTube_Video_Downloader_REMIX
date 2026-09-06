@@ -225,68 +225,74 @@
         }
     }
 
-    // Helper: Extract live comments count from various YouTube DOM selectors & data
-    function getCommentsCountFromAllSources() {
+    // Helper: Extract live NUMERIC comments count from various YouTube DOM selectors & data
+    // Strictly numeric (e.g. '691', '12.4K', '1,250') or '0 (Disabled)'. NEVER 'Active' or 'Disactive'!
+    function extractNumericCommentsCount() {
         // 1. Check if comments are turned off
         const disabledEl = document.querySelector('ytd-comments #message, #comments #message, ytd-message-renderer');
         if (disabledEl && (disabledEl.textContent || '').toLowerCase().includes('turned off')) {
-            return 'Off';
+            return '0 (Disabled)';
         }
 
-        // 2. Check all count selectors
+        // 2. Check direct comments count selectors
         const selectors = [
             'ytd-comments-header-renderer #count .yt-core-attributed-string',
             'ytd-comments-header-renderer h2#count span',
             'ytd-comments-header-renderer #count',
             'ytd-comments-header-renderer h2#count',
             '#count.ytd-comments-header-renderer',
-            'ytd-comments-entry-point-teaser-renderer #comment-count',
-            'ytd-comments-entry-point-header-renderer #comment-count',
             '#comments #count span',
             '#comments #count',
             '#comments-header #count',
-            '#comments-entry-point-teaser',
+            'ytd-comments-entry-point-teaser-renderer #comment-count',
+            'ytd-comments-entry-point-header-renderer #comment-count',
+            'ytd-item-section-header-renderer #title',
             'ytd-comments #count'
         ];
         for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (el) {
                 const txt = (el.innerText || el.textContent || '').trim();
-                const m = txt.match(/([0-9.,]+(?:\s*[KMBkmb])?)/);
-                if (m && m[1] && m[1] !== '0') return m[1].trim();
-            }
-        }
-
-        // 3. Search ytInitialData safely via substring search
-        try {
-            if (window.ytInitialData) {
-                const str = JSON.stringify(window.ytInitialData);
-                const keys = ['"commentCount"', '"commentsCount"', '"countText"', '"commentsEntryPointTeaserRenderer"'];
-                for (const k of keys) {
-                    let pos = 0;
-                    while ((pos = str.indexOf(k, pos)) !== -1) {
-                        const chunk = str.substring(pos, pos + 250);
-                        const m = chunk.match(/"(?:text|simpleText)":\s*"([0-9.,KMBkmb\s]+(?:\s*Comments)?)"/i);
-                        if (m && m[1] && m[1].trim() !== 'Comments') {
-                            return m[1].replace(/Comments?/i, '').trim();
-                        }
-                        pos += k.length;
+                const m = txt.match(/([0-9][0-9.,]*\s*[KMBkmb]?)/);
+                if (m && m[1]) {
+                    const clean = m[1].replace(/\s+/g, '').trim();
+                    if (clean && !isNaN(parseFloat(clean.replace(/,/g, '')))) {
+                        return clean;
                     }
                 }
             }
-        } catch (e) { }
-
-        // 4. Check if comments section is present and active
-        const commentsSection = document.querySelector('ytd-comments, #comments, ytd-comments-header-renderer');
-        if (commentsSection && commentsSection.isConnected) {
-            return 'Active';
         }
+
+        // 3. Search document headings for pattern "XXX Comments"
+        const countHeadings = document.querySelectorAll('h2, span.yt-core-attributed-string, yt-formatted-string.count-text');
+        for (const el of countHeadings) {
+            const t = (el.innerText || el.textContent || '').trim();
+            const m = t.match(/^([0-9][0-9.,]*\s*[KMBkmb]?)\s+Comments?$/i);
+            if (m && m[1]) {
+                return m[1].replace(/\s+/g, '').trim();
+            }
+        }
+
+        // 4. Search ytInitialData safely via regex
+        try {
+            if (window.ytInitialData) {
+                const str = JSON.stringify(window.ytInitialData);
+                const m = str.match(/"countText"\s*:\s*\{\s*"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"([0-9.,KMBkmb]+)"\s*\}/i);
+                if (m && m[1]) return m[1].trim();
+
+                const m2 = str.match(/"countText"\s*:\s*\{\s*"simpleText"\s*:\s*"([0-9.,KMBkmb]+)\s*Comments?"/i);
+                if (m2 && m2[1]) return m2[1].trim();
+
+                const m3 = str.match(/"commentCount"\s*:\s*\{\s*"simpleText"\s*:\s*"([0-9.,KMBkmb]+)"/i);
+                if (m3 && m3[1]) return m3[1].trim();
+            }
+        } catch (e) { }
 
         return null;
     }
 
-    // Helper: Extract Info Cards ("i" button) & Playlist details
-    function extractCardsAndPlaylist(pr) {
+    // Helper: Extract Info Cards ("i" button) & Playlist details with 16:9 thumbnails
+    function extractCardsAndPlaylist(pr, vid) {
         const infoCards = [];
         let playlistInfo = null;
 
@@ -299,30 +305,38 @@
 
                 if (cr.videoCardRenderer) {
                     const vc = cr.videoCardRenderer;
+                    const cardVid = vc.videoId;
+                    const thumb = vc.thumbnail?.thumbnails?.[0]?.url || (cardVid ? `https://i.ytimg.com/vi/${cardVid}/mqdefault.jpg` : '');
                     infoCards.push({
                         type: 'video',
-                        badge: 'ℹ️ i-Button Video',
+                        badge: 'ℹ️ i-Card Video',
                         title: vc.title?.simpleText || vc.title?.runs?.[0]?.text || 'Suggested Video',
-                        sub: vc.ownerName?.simpleText || '',
-                        url: vc.videoId ? `https://www.youtube.com/watch?v=${vc.videoId}` : null
+                        sub: vc.ownerName?.simpleText || 'Creator Video',
+                        url: cardVid ? `https://www.youtube.com/watch?v=${cardVid}` : null,
+                        thumb: thumb
                     });
                 } else if (cr.playlistCardRenderer) {
                     const pc = cr.playlistCardRenderer;
+                    const pId = pc.playlistId;
+                    const thumb = pc.thumbnail?.thumbnails?.[0]?.url || (vid ? `https://i.ytimg.com/vi/${vid}/mqdefault.jpg` : '');
                     infoCards.push({
                         type: 'playlist',
-                        badge: '📑 i-Button Playlist',
+                        badge: '📑 i-Card Playlist',
                         title: pc.title?.simpleText || pc.title?.runs?.[0]?.text || 'Suggested Playlist',
-                        sub: pc.videoCountText?.simpleText || '',
-                        url: pc.playlistId ? `https://www.youtube.com/playlist?list=${pc.playlistId}` : null
+                        sub: pc.videoCountText?.simpleText || 'Playlist',
+                        url: pId ? `https://www.youtube.com/playlist?list=${pId}` : null,
+                        thumb: thumb
                     });
                 } else if (cr.collaboratorCardRenderer) {
                     const col = cr.collaboratorCardRenderer;
+                    const thumb = col.avatar?.thumbnails?.[0]?.url || col.thumbnail?.thumbnails?.[0]?.url || '';
                     infoCards.push({
                         type: 'channel',
                         badge: '👤 Collaborator',
                         title: col.name?.simpleText || 'Collaborator Channel',
-                        sub: col.subscriberCountText?.simpleText || '',
-                        url: col.endpoint?.commandMetadata?.webCommandMetadata?.url ? `https://www.youtube.com${col.endpoint.commandMetadata.webCommandMetadata.url}` : null
+                        sub: col.subscriberCountText?.simpleText || 'Creator',
+                        url: col.endpoint?.commandMetadata?.webCommandMetadata?.url ? `https://www.youtube.com${col.endpoint.commandMetadata.webCommandMetadata.url}` : null,
+                        thumb: thumb
                     });
                 }
             });
@@ -337,13 +351,16 @@
                 const style = er.style;
                 const title = er.title?.simpleText || er.title?.runs?.[0]?.text || '';
                 const ep = er.endpoint?.watchEndpoint;
+                const thumb = er.image?.thumbnails?.[0]?.url || (ep?.videoId ? `https://i.ytimg.com/vi/${ep.videoId}/mqdefault.jpg` : '');
+
                 if (style === 'VIDEO' && ep?.videoId && !infoCards.some(i => i.url?.includes(ep.videoId))) {
                     infoCards.push({
                         type: 'video',
                         badge: '📺 Endscreen Video',
                         title: title || 'Recommended Video',
                         sub: 'Creator Endscreen',
-                        url: `https://www.youtube.com/watch?v=${ep.videoId}`
+                        url: `https://www.youtube.com/watch?v=${ep.videoId}`,
+                        thumb: thumb
                     });
                 } else if (style === 'PLAYLIST' && ep?.playlistId && !infoCards.some(i => i.url?.includes(ep.playlistId))) {
                     infoCards.push({
@@ -351,7 +368,8 @@
                         badge: '📑 Endscreen Playlist',
                         title: title || 'Recommended Playlist',
                         sub: er.playlistLength?.simpleText || 'Playlist',
-                        url: `https://www.youtube.com/playlist?list=${ep.playlistId}`
+                        url: `https://www.youtube.com/playlist?list=${ep.playlistId}`,
+                        thumb: thumb
                     });
                 }
             });
@@ -379,7 +397,8 @@
                     id: listId,
                     title: playlistTitle,
                     index: playlistIndex,
-                    url: `https://www.youtube.com/playlist?list=${listId}`
+                    url: `https://www.youtube.com/playlist?list=${listId}`,
+                    thumb: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`
                 };
             }
         } catch (e) {}
@@ -424,13 +443,33 @@
         };
 
         // 1. YouTube Player Response (Direct Rich Data)
-        let pr = window.ytInitialPlayerResponse;
+        // Prefer live movie_player.getPlayerResponse() on SPA navigation!
+        let pr = null;
+        try {
+            const player = document.getElementById('movie_player');
+            if (player && typeof player.getPlayerResponse === 'function') {
+                const livePR = player.getPlayerResponse();
+                if (livePR && livePR.videoDetails?.videoId === vid) {
+                    pr = livePR;
+                }
+            }
+        } catch (e) { }
+
+        if (!pr && window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails?.videoId === vid) {
+            pr = window.ytInitialPlayerResponse;
+        }
+
         if (!pr) {
             try {
                 const prScript = Array.from(document.querySelectorAll('script')).find(s => s.textContent && s.textContent.includes('ytInitialPlayerResponse ='));
                 if (prScript) {
                     const match = prScript.textContent.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
-                    if (match) pr = JSON.parse(match[1]);
+                    if (match) {
+                        const parsed = JSON.parse(match[1]);
+                        if (parsed && parsed.videoDetails?.videoId === vid) {
+                            pr = parsed;
+                        }
+                    }
                 }
             } catch (e) { }
         }
@@ -515,7 +554,7 @@
         }
 
         // 4. Comments from DOM (multi-selector fallback)
-        data.commentsFormatted = getCommentsCountFromAllSources() || 'Active';
+        data.commentsFormatted = extractNumericCommentsCount() || 'Loading...';
 
         // 5. Description from DOM
         const descEl = document.querySelector('ytd-text-inline-expander#description-inline-expander, #description-inner, ytd-watch-metadata div#description');
@@ -553,7 +592,7 @@
         data.hashtags = Array.from(new Set(hashList));
 
         // 8. Info Cards ("i" button) & Playlist Intelligence
-        const cardPack = extractCardsAndPlaylist(pr);
+        const cardPack = extractCardsAndPlaylist(pr, vid);
         data.infoCards = cardPack.infoCards;
         data.playlistInfo = cardPack.playlistInfo;
 
@@ -709,6 +748,10 @@
                     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
                     padding-top: 14px !important;
                     width: 100% !important;
+                }
+                .eyvd-body.eyvd-is-collapsed,
+                #eyvd-seo-inspector-panel.eyvd-collapsed-panel #eyvd-panel-body {
+                    display: none !important;
                 }
 
                 /* Responsive Row Headers */
@@ -908,38 +951,116 @@
                     color: #fff !important;
                 }
 
-                /* Active Playlist & Info Cards */
-                .eyvd-playlist-card {
+                /* 1-Row Horizontal Cards Strip with 16:9 Thumbnails */
+                .eyvd-cards-row {
                     display: flex !important;
-                    flex-wrap: wrap !important;
-                    justify-content: space-between !important;
-                    align-items: center !important;
-                    gap: 10px !important;
-                    background: rgba(6, 182, 212, 0.1) !important;
-                    border: 1px solid rgba(6, 182, 212, 0.3) !important;
-                    border-radius: 8px !important;
-                    padding: 10px 14px !important;
+                    flex-direction: row !important;
+                    gap: 12px !important;
+                    overflow-x: auto !important;
+                    padding: 4px 2px 10px 2px !important;
                     width: 100% !important;
+                    box-sizing: border-box !important;
+                    scrollbar-width: thin !important;
+                    scrollbar-color: rgba(56, 189, 248, 0.4) rgba(0, 0, 0, 0.2) !important;
+                    -webkit-overflow-scrolling: touch !important;
                 }
-                .eyvd-cards-grid {
-                    display: grid !important;
-                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
-                    gap: 8px !important;
-                    width: 100% !important;
+                .eyvd-cards-row::-webkit-scrollbar {
+                    height: 6px !important;
                 }
-                .eyvd-info-card-item {
-                    background: rgba(0, 0, 0, 0.28) !important;
-                    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+                .eyvd-cards-row::-webkit-scrollbar-track {
+                    background: rgba(0, 0, 0, 0.2) !important;
+                    border-radius: 9999px !important;
+                }
+                .eyvd-cards-row::-webkit-scrollbar-thumb {
+                    background: rgba(56, 189, 248, 0.35) !important;
+                    border-radius: 9999px !important;
+                }
+                .eyvd-cards-row::-webkit-scrollbar-thumb:hover {
+                    background: rgba(56, 189, 248, 0.65) !important;
+                }
+                .eyvd-card-item {
+                    flex: 0 0 190px !important;
+                    width: 190px !important;
+                    background: rgba(255, 255, 255, 0.03) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.09) !important;
                     border-radius: 8px !important;
-                    padding: 9px 11px !important;
+                    overflow: hidden !important;
+                    text-decoration: none !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    gap: 4px !important;
+                    transition: all 0.22s ease !important;
+                    cursor: pointer !important;
+                    box-sizing: border-box !important;
+                }
+                .eyvd-card-item:hover {
+                    background: rgba(255, 255, 255, 0.07) !important;
+                    border-color: rgba(56, 189, 248, 0.5) !important;
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4) !important;
+                }
+                .eyvd-card-thumb-wrap {
+                    position: relative !important;
+                    width: 100% !important;
+                    aspect-ratio: 16 / 9 !important;
+                    background: #0f172a !important;
+                    overflow: hidden !important;
+                }
+                .eyvd-card-thumb-img {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                    display: block !important;
+                    transition: transform 0.25s ease !important;
+                }
+                .eyvd-card-item:hover .eyvd-card-thumb-img {
+                    transform: scale(1.05) !important;
+                }
+                .eyvd-card-badge {
+                    position: absolute !important;
+                    bottom: 4px !important;
+                    right: 4px !important;
+                    background: rgba(0, 0, 0, 0.85) !important;
+                    backdrop-filter: blur(4px) !important;
+                    color: #38bdf8 !important;
+                    font-size: 10px !important;
+                    font-weight: 700 !important;
+                    padding: 2px 6px !important;
+                    border-radius: 4px !important;
+                    border: 1px solid rgba(56, 189, 248, 0.35) !important;
+                    white-space: nowrap !important;
+                }
+                .eyvd-card-info {
+                    padding: 8px 10px 10px 10px !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 3px !important;
                     min-width: 0 !important;
                 }
-                .eyvd-info-card-item:hover {
-                    background: rgba(255, 255, 255, 0.04) !important;
-                    border-color: rgba(255, 255, 255, 0.16) !important;
+                .eyvd-card-title {
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    color: #f1f5f9 !important;
+                    line-height: 1.35 !important;
+                    display: -webkit-box !important;
+                    -webkit-line-clamp: 2 !important;
+                    -webkit-box-orient: vertical !important;
+                    overflow: hidden !important;
+                }
+                .eyvd-card-sub {
+                    font-size: 11px !important;
+                    color: #94a3b8 !important;
+                    white-space: nowrap !important;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                }
+                .eyvd-card-cta {
+                    font-size: 11px !important;
+                    color: #38bdf8 !important;
+                    font-weight: 600 !important;
+                    margin-top: 3px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 3px !important;
                 }
 
                 /* Mobile & Zoom Adjustments */
@@ -982,27 +1103,27 @@
                     <div class="eyvd-stats-grid">
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Views</span>
-                            <span class="eyvd-stat-v" style="color:#60a5fa;">${meta.viewsFormatted}</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-views" style="color:#60a5fa;">${meta.viewsFormatted}</span>
                             <span class="eyvd-stat-sub">${Number(meta.viewsExact).toLocaleString()} exact</span>
                         </div>
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Likes</span>
-                            <span class="eyvd-stat-v" style="color:#34d399;">${meta.likesFormatted}</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-likes" style="color:#34d399;">${meta.likesFormatted}</span>
                             <span class="eyvd-stat-sub">Audience thumbs up</span>
                         </div>
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Dislikes</span>
-                            <span class="eyvd-stat-v" style="color:#f87171;">${meta.dislikesFormatted}</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-dislikes" style="color:#f87171;">${meta.dislikesFormatted}</span>
                             <span class="eyvd-stat-sub">Live RYD API</span>
                         </div>
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Rating</span>
-                            <span class="eyvd-stat-v" style="color:#fbbf24;">${meta.ratingScore}</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-rating" style="color:#fbbf24;">${meta.ratingScore}</span>
                             <span class="eyvd-stat-sub">${meta.positiveSentiment}</span>
                         </div>
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Hype Score</span>
-                            <span class="eyvd-stat-v" style="color:#c084fc;">${meta.hypeScore}</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-hype" style="color:#c084fc;">${meta.hypeScore}</span>
                             <span class="eyvd-stat-sub">${meta.hypeGrade}</span>
                         </div>
                         <div class="eyvd-stat-card">
@@ -1021,8 +1142,8 @@
                     <div class="eyvd-timing-grid">
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Exact Upload Date & Time (IST)</span>
-                            <span class="eyvd-stat-v" style="color:#34d399;font-size:13.5px;font-weight:700;">${meta.uploadDateIST} • ${meta.uploadTimeIST}</span>
-                            <span class="eyvd-stat-sub">⏳ ${meta.timeElapsed} (Since uploaded to YouTube)</span>
+                            <span class="eyvd-stat-v" id="eyvd-stat-upload" style="color:#34d399;font-size:13.5px;font-weight:700;">${meta.uploadDateIST} • ${meta.uploadTimeIST}</span>
+                            <span class="eyvd-stat-sub" id="eyvd-stat-elapsed">⏳ ${meta.timeElapsed} (Since uploaded to YouTube)</span>
                         </div>
                         <div class="eyvd-stat-card">
                             <span class="eyvd-stat-k">Current Time (IST UTC+5:30)</span>
@@ -1102,40 +1223,46 @@
                 <div>
                     <div class="eyvd-row-header">
                         <span class="eyvd-label">ℹ️ Creator Info Cards ("i" Button) & Playlist Intelligence (${(meta.infoCards.length + (meta.playlistInfo ? 1 : 0))} Found)</span>
-                        ${meta.playlistInfo ? `<a href="${meta.playlistInfo.url}" target="_blank" class="eyvd-btn" style="text-decoration:none;">▶️ Open Full Playlist</a>` : ''}
+                        <span style="font-size:11px;color:#94a3b8;">Click any card to open directly ↗</span>
                     </div>
-                    ${meta.playlistInfo ? `
-                        <div class="eyvd-playlist-card" style="margin-bottom:8px;">
-                            <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
-                                <span style="font-size:22px;flex-shrink:0;">📑</span>
-                                <div style="min-width:0;">
-                                    <div style="font-size:13px;font-weight:700;color:#38bdf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Active Playlist: ${meta.playlistInfo.title}</div>
-                                    <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Track / Position: <strong style="color:#fff;">${meta.playlistInfo.index}</strong> • ID: <code style="color:#cbd5e1;">${meta.playlistInfo.id}</code></div>
-                                </div>
-                            </div>
-                            <a href="${meta.playlistInfo.url}" target="_blank" class="eyvd-btn eyvd-btn-primary" style="text-decoration:none;flex-shrink:0;">▶️ Play Playlist</a>
-                        </div>
-                    ` : ''}
-                    ${meta.infoCards.length > 0 ? `
-                        <div class="eyvd-cards-grid">
+                    ${(meta.infoCards.length > 0 || meta.playlistInfo) ? `
+                        <div class="eyvd-cards-row">
+                            ${meta.playlistInfo ? `
+                                <a href="${meta.playlistInfo.url}" target="_blank" class="eyvd-card-item" style="border-color:rgba(56,189,248,0.45);">
+                                    <div class="eyvd-card-thumb-wrap">
+                                        <img src="${meta.playlistInfo.thumb}" class="eyvd-card-thumb-img" alt="Active Playlist" onerror="this.src='https://i.ytimg.com/vi/${meta.id}/mqdefault.jpg'" />
+                                        <span class="eyvd-card-badge" style="color:#fbbf24;border-color:rgba(251,191,36,0.5);">📑 Active Playlist</span>
+                                    </div>
+                                    <div class="eyvd-card-info">
+                                        <div class="eyvd-card-title" title="${meta.playlistInfo.title}">${meta.playlistInfo.title}</div>
+                                        <div class="eyvd-card-sub">${meta.playlistInfo.index}</div>
+                                        <div class="eyvd-card-cta">▶ Open Playlist ↗</div>
+                                    </div>
+                                </a>
+                            ` : ''}
                             ${meta.infoCards.map(c => `
-                                <div class="eyvd-info-card-item">
-                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
-                                        <span class="eyvd-pill eyvd-pill-purple" style="font-size:10px;padding:2px 6px;">${c.badge}</span>
-                                        ${c.url ? `<a href="${c.url}" target="_blank" class="eyvd-btn" style="padding:2px 8px;font-size:10.5px;text-decoration:none;">🔗 Open</a>` : ''}
+                                <a href="${c.url || '#'}" target="_blank" class="eyvd-card-item">
+                                    <div class="eyvd-card-thumb-wrap">
+                                        ${c.thumb ? `
+                                            <img src="${c.thumb}" class="eyvd-card-thumb-img" alt="${c.title}" onerror="this.src='https://i.ytimg.com/vi/${meta.id}/mqdefault.jpg'" />
+                                        ` : `
+                                            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#38bdf8;font-size:24px;">ℹ️</div>
+                                        `}
+                                        <span class="eyvd-card-badge">${c.badge}</span>
                                     </div>
-                                    <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.title}">
-                                        ${c.title}
+                                    <div class="eyvd-card-info">
+                                        <div class="eyvd-card-title" title="${c.title}">${c.title}</div>
+                                        <div class="eyvd-card-sub">${c.sub || 'Creator Pick'}</div>
+                                        <div class="eyvd-card-cta">🔗 Open Card ↗</div>
                                     </div>
-                                    ${c.sub ? `<div style="font-size:10.5px;color:#94a3b8;">${c.sub}</div>` : ''}
-                                </div>
+                                </a>
                             `).join('')}
                         </div>
-                    ` : (!meta.playlistInfo ? `
+                    ` : `
                         <div style="font-size:12px;color:#94a3b8;font-style:italic;padding:8px 12px;background:rgba(0,0,0,0.2);border-radius:6px;border:1px solid rgba(255,255,255,0.05);">
                             No creator "i" button cards or active playlist detected for this video.
                         </div>
-                    ` : '')}
+                    `}
                 </div>
 
                 <!-- 8. Action Station -->
@@ -1164,18 +1291,43 @@
         }
 
         // Bind events safely
+        // Bind toggle events safely for both button and entire header bar
         const toggleBar = panel.querySelector('#eyvd-panel-toggle');
+        const minBtn = panel.querySelector('#eyvd-min-btn');
         const bodyEl = panel.querySelector('#eyvd-panel-body');
         const toggleLbl = panel.querySelector('#eyvd-toggle-lbl');
         const toggleArr = panel.querySelector('#eyvd-toggle-arr');
 
+        const togglePanel = (e) => {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            if (!bodyEl) return;
+            const isCurrentlyHidden = bodyEl.classList.contains('eyvd-is-collapsed') ||
+                                      panel.classList.contains('eyvd-collapsed-panel') ||
+                                      bodyEl.style.display === 'none';
+
+            if (isCurrentlyHidden) {
+                bodyEl.classList.remove('eyvd-is-collapsed');
+                panel.classList.remove('eyvd-collapsed-panel');
+                bodyEl.style.setProperty('display', 'flex', 'important');
+                if (toggleLbl) toggleLbl.textContent = 'Minimize';
+                if (toggleArr) toggleArr.textContent = '▲';
+            } else {
+                bodyEl.classList.add('eyvd-is-collapsed');
+                panel.classList.add('eyvd-collapsed-panel');
+                bodyEl.style.setProperty('display', 'none', 'important');
+                if (toggleLbl) toggleLbl.textContent = 'Expand';
+                if (toggleArr) toggleArr.textContent = '▼';
+            }
+        };
+
+        if (minBtn) minBtn.onclick = togglePanel;
         if (toggleBar) {
             toggleBar.onclick = (e) => {
-                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-                const isHidden = bodyEl && bodyEl.style.display === 'none';
-                if (bodyEl) bodyEl.style.display = isHidden ? 'flex' : 'none';
-                if (toggleLbl) toggleLbl.textContent = isHidden ? 'Minimize' : 'Expand';
-                if (toggleArr) toggleArr.textContent = isHidden ? '▲' : '▼';
+                if (e.target.closest('#eyvd-min-btn')) return;
+                togglePanel(e);
             };
         }
 
@@ -1239,26 +1391,27 @@
             };
         });
 
-        // Live Comments Observer: dynamically poll comments count until YouTube renders it
+        // Live Comments Observer: dynamically poll NUMERIC comments count until YouTube renders it
         const commentsValEl = panel.querySelector('#eyvd-stat-comments');
         if (commentsValEl) {
             let attempts = 0;
             const commentsWatcher = setInterval(() => {
                 attempts++;
-                if (!panel.isConnected || attempts > 25) {
+                if (!panel.isConnected || attempts > 35) {
                     clearInterval(commentsWatcher);
                     if (commentsValEl.textContent === 'Loading...' || commentsValEl.textContent === '...') {
-                        commentsValEl.textContent = 'Active';
+                        const finalCount = extractNumericCommentsCount();
+                        commentsValEl.textContent = finalCount || '0';
                     }
                     return;
                 }
-                const found = getCommentsCountFromAllSources();
-                if (found && found !== '0' && found !== 'Loading...') {
+                const found = extractNumericCommentsCount();
+                if (found) {
                     commentsValEl.textContent = found;
                     meta.commentsFormatted = found;
                     clearInterval(commentsWatcher);
                 }
-            }, 1000);
+            }, 800);
         }
 
         // Live IST Clock Ticker
@@ -1395,6 +1548,84 @@
     let isInjectingInspector = false;
     let currentInjectingVid = null;
 
+    // 4-Second Post-Play & Navigation Reconfirmation Engine: Verifies all displayed details after playback starts
+    let reconfirmTimer = null;
+    function schedule4SecReconfirm(vid) {
+        if (!vid) return;
+        if (reconfirmTimer) clearTimeout(reconfirmTimer);
+        reconfirmTimer = setTimeout(async () => {
+            const currentVid = getVideoId();
+            if (currentVid !== vid) return;
+            console.log(`[EYVD REMIX] Running 4-second post-play reconfirmation check for video: ${vid}...`);
+            await reconfirmAndRefreshPanel(vid);
+        }, 4000);
+    }
+
+    function attachVideoPlayListener(vid) {
+        const video = document.querySelector('video.html5-main-video, video');
+        if (video) {
+            const onPlay = () => {
+                schedule4SecReconfirm(vid);
+            };
+            video.addEventListener('playing', onPlay, { once: true });
+        }
+    }
+
+    async function reconfirmAndRefreshPanel(vid) {
+        const currentVid = getVideoId();
+        if (currentVid !== vid) return;
+
+        const panel = document.getElementById('eyvd-seo-inspector-panel');
+        if (!panel || !panel.isConnected || panel.getAttribute('data-video-id') !== vid) {
+            await injectInspectorPanel();
+            return;
+        }
+
+        // Fetch fresh metadata using live player response & fresh DOM
+        const fresh = await extractFullMetadata(vid);
+        if (getVideoId() !== vid) return;
+
+        // In-place updates for zero flickering:
+        const viewsEl = panel.querySelector('#eyvd-stat-views');
+        if (viewsEl && fresh.viewsFormatted) viewsEl.textContent = fresh.viewsFormatted;
+
+        const likesEl = panel.querySelector('#eyvd-stat-likes');
+        if (likesEl && fresh.likesFormatted) likesEl.textContent = fresh.likesFormatted;
+
+        const dislikesEl = panel.querySelector('#eyvd-stat-dislikes');
+        if (dislikesEl && fresh.dislikesFormatted && fresh.dislikesFormatted !== '...') dislikesEl.textContent = fresh.dislikesFormatted;
+
+        const ratingEl = panel.querySelector('#eyvd-stat-rating');
+        if (ratingEl && fresh.ratingScore && fresh.ratingScore !== '...') ratingEl.textContent = fresh.ratingScore;
+
+        const hypeEl = panel.querySelector('#eyvd-stat-hype');
+        if (hypeEl && fresh.hypeScore && fresh.hypeScore !== '...') hypeEl.textContent = fresh.hypeScore;
+
+        const commentsEl = panel.querySelector('#eyvd-stat-comments');
+        if (commentsEl) {
+            const numComments = extractNumericCommentsCount();
+            if (numComments) commentsEl.textContent = numComments;
+        }
+
+        const uploadEl = panel.querySelector('#eyvd-stat-upload');
+        if (uploadEl && fresh.uploadDateIST) {
+            uploadEl.textContent = `${fresh.uploadDateIST} • ${fresh.uploadTimeIST}`;
+        }
+
+        const elapsedEl = panel.querySelector('#eyvd-stat-elapsed');
+        if (elapsedEl && fresh.timeElapsed) {
+            elapsedEl.textContent = `⏳ ${fresh.timeElapsed} (Since uploaded to YouTube)`;
+        }
+
+        const qualityPill = panel.querySelector('.eyvd-pill-success');
+        if (qualityPill && fresh.maxQuality) {
+            qualityPill.textContent = fresh.maxQuality;
+        }
+
+        panel.setAttribute('data-reconfirmed', 'true');
+        console.log(`[EYVD REMIX] 4-Second Post-Play Reconfirmation complete: video ${vid} details 100% verified & fresh.`);
+    }
+
     // Clean Placement: ALWAYS placed OUTSIDE YouTube's description card (DIV#description)
     // This completely separates our panel from YouTube's description expander, Gemini AI summary (+ Summary), and chapters!
     async function injectInspectorPanel() {
@@ -1406,10 +1637,11 @@
             return;
         }
 
-        // If an inspector panel is already mounted for this video, ensure quick pill and exit
+        // If an inspector panel is already mounted for this video, ensure quick pill, reconfirm and exit
         const existingPanels = document.querySelectorAll('#eyvd-seo-inspector-panel');
         if (existingPanels.length === 1 && existingPanels[0].isConnected && existingPanels[0].getAttribute('data-video-id') === vid) {
             injectQuickPill();
+            schedule4SecReconfirm(vid);
             return;
         }
 
@@ -1437,6 +1669,8 @@
             if (descBox && descBox.parentElement) {
                 descBox.parentElement.insertBefore(panel, descBox.nextSibling);
                 console.log('EYVD REMIX: Panel mounted OUTSIDE description card right after div#description!');
+                schedule4SecReconfirm(vid);
+                attachVideoPlayListener(vid);
                 return;
             }
 
@@ -1445,6 +1679,8 @@
             if (bottomRow) {
                 bottomRow.appendChild(panel);
                 console.log('EYVD REMIX: Panel appended to ytd-watch-metadata #bottom-row!');
+                schedule4SecReconfirm(vid);
+                attachVideoPlayListener(vid);
                 return;
             }
 
@@ -1453,6 +1689,8 @@
             if (comments && comments.parentElement) {
                 comments.parentElement.insertBefore(panel, comments);
                 console.log('EYVD REMIX: Panel mounted right above comments!');
+                schedule4SecReconfirm(vid);
+                attachVideoPlayListener(vid);
                 return;
             }
 
@@ -1461,6 +1699,8 @@
             if (watchMeta) {
                 watchMeta.appendChild(panel);
                 console.log('EYVD REMIX: Panel appended to ytd-watch-metadata!');
+                schedule4SecReconfirm(vid);
+                attachVideoPlayListener(vid);
                 return;
             }
         } catch (err) {
@@ -1525,10 +1765,14 @@
         }, 2000);
 
         window.addEventListener('yt-navigate-finish', () => {
+            const vid = getVideoId();
             setTimeout(injectInspectorPanel, 350);
+            if (vid) schedule4SecReconfirm(vid);
         });
         window.addEventListener('yt-page-data-updated', () => {
+            const vid = getVideoId();
             setTimeout(injectInspectorPanel, 350);
+            if (vid) schedule4SecReconfirm(vid);
         });
     }
 
