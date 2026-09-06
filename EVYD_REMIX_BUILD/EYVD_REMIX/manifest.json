@@ -2,7 +2,7 @@
   "name": "Easy Youtube Video Downloader Express",
   "description": "No# 1 Rated Youtube Video Downloader for web browsers with MP3 and Full-HD downloads. Instant, one-click Youtube video downloader with high-quality 256Kbps/128Kbps MP3 and Full-HD video downloading options.",
   "manifest_version": 3,
-  "version": "25.8",
+  "version": "25.9",
   "icons": {
     "48": "icons/icon.png"
   },
@@ -11,6 +11,22 @@
     "type": "module"
   },
   "content_scripts": [
+    {
+      "js": [
+        "includes/page_bridge.js"
+      ],
+      "matches": [
+        "http://www.youtube.com/*",
+        "https://www.youtube.com/*",
+        "http://m.youtube.com/*"
+      ],
+      "exclude_matches": [
+        "http://www.youtube.com/embed/*",
+        "https://www.youtube.com/embed/*"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "js": [
         "includes/ui.js",
@@ -53,7 +69,8 @@
         "includes/persistent-storage.js",
         "lib/libav-6.8.8.0-h264-aac-mp3.wasm.wasm",
         "lib/libav-6.8.8.0-h264-aac-mp3.wasm.mjs",
-        "includes/hls_worker_v2.js"
+        "includes/hls_worker_v2.js",
+        "includes/page_bridge.js"
       ],
       "matches": [
         "<all_urls>"
