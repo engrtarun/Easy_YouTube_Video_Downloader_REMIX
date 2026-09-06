@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Easy YouTube Video Downloader</title>
+    <style>
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+      }
+
+      #main-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      @keyframes progressFill {
+        0% {
+          width: 0%;
+        }
+        to {
+          width: var(--progress-width);
+        }
+      }
+
+      
+      @media (max-width: 480px) {
+        .container {
+          padding: 12px;
+        }
+
+        .dashboard-card {
+          padding: 16px !important;
+        }
+
+        .progress-text {
+          font-size: 13px !important;
+        }
+
+        .download-btn {
+          padding: 12px 20px !important;
+          font-size: 14px !important;
+        }
+      }
+
+      
+      body.notification-mode {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+      }
+      body.notification-mode #main-container {
+        align-items: flex-start;
+        height: auto;
+        min-height: 100%;
+      }
+      body.notification-mode .dashboard-card {
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 16px !important;
+        min-height: 0 !important;
+        height: auto !important;
+      }
+      
+      body.notification-mode .dashboard-card > div:first-child {
+        display: none !important;
+      }
+      body.notification-mode #right-panel {
+        
+        display: none !important;
+      }
+      body.notification-mode #download-status-section,
+      body.notification-mode #processing-status-section {
+        padding: 12px 14px !important;
+      }
+      body.notification-mode h2 {
+        font-size: 16px !important;
+      }
+      body.notification-mode #download-progress-text,
+      body.notification-mode #processing-status-text {
+        font-size: 13px !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="main-container"></div>
+    <script src="persistent-storage.js"></script>
+    <script src="progress-display.js"></script>
+  </body>
+</html>
