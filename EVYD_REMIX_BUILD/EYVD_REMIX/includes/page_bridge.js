@@ -141,17 +141,38 @@
         checkAndSend();
     });
 
-    // Live Ping / Network Telemetry Ticker Request
-    window.addEventListener('eyvd_request_live_stats', () => {
+    // Live Telemetry & Playback Quality Ticker Request (0.7s)
+    function attachQualityListener() {
         try {
             const player = document.getElementById('movie_player');
+            if (player && typeof player.addEventListener === 'function' && !window.__eyvdQualityListenerAttached) {
+                window.__eyvdQualityListenerAttached = true;
+                player.addEventListener('onPlaybackQualityChange', (q) => {
+                    window.dispatchEvent(new CustomEvent('eyvd_quality_changed', { detail: { quality: q } }));
+                });
+            }
+        } catch (e) { }
+    }
+    attachQualityListener();
+
+    window.addEventListener('eyvd_request_live_stats', () => {
+        attachQualityListener();
+        try {
+            const player = document.getElementById('movie_player');
+            const video = document.querySelector('video');
             const stats = player?.getStatsForNerds ? player.getStatsForNerds() : null;
             const currentQuality = player?.getPlaybackQuality ? player.getPlaybackQuality() : null;
+            const availableQualities = player?.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
             window.dispatchEvent(new CustomEvent('eyvd_live_stats_response', {
                 detail: {
                     bandwidth_kbps: stats?.bandwidth_kbps || null,
                     resolution: stats?.resolution || null,
-                    currentQuality: currentQuality || null
+                    currentQuality: currentQuality || null,
+                    availableQualities: availableQualities,
+                    videoHeight: video?.videoHeight || 0,
+                    videoWidth: video?.videoWidth || 0,
+                    isPaused: !!video?.paused,
+                    isOnline: navigator.onLine
                 }
             }));
         } catch (e) { }
@@ -159,6 +180,7 @@
 
     // Auto-listen to YouTube SPA lifecycle events
     window.addEventListener('yt-navigate-finish', () => {
+        attachQualityListener();
         let attempts = 0;
         const poll = () => {
             attempts++;
@@ -173,6 +195,7 @@
     });
 
     window.addEventListener('yt-page-data-updated', () => {
+        attachQualityListener();
         dispatchData('yt-page-data-updated');
     });
 

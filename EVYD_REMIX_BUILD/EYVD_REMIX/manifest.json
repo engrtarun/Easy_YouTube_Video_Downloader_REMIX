@@ -2,7 +2,7 @@
   "name": "Easy Youtube Video Downloader Express",
   "description": "No# 1 Rated Youtube Video Downloader for web browsers with MP3 and Full-HD downloads. Instant, one-click Youtube video downloader with high-quality 256Kbps/128Kbps MP3 and Full-HD video downloading options.",
   "manifest_version": 3,
-  "version": "26.0",
+  "version": "26.1",
   "icons": {
     "48": "icons/icon.png"
   },

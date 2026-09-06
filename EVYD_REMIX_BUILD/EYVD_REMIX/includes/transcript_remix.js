@@ -552,6 +552,8 @@
             URL.revokeObjectURL(url);
         }
     }
+    window.eyvdExtractAndHandleTranscript = extractAndHandleTranscript;
+    window.eyvdDoTranscriptAction = doTranscriptAction;
     
     // Helper for copy feedback on both normal and shorts
     function showCopyFeedback(success) {

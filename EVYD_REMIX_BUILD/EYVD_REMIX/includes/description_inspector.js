@@ -79,6 +79,54 @@
         return c;
     }
 
+    function resolvePlayingQuality(height, qualityLevel, resolutionStr, avQualities) {
+        const h = parseInt(height, 10);
+        if (!isNaN(h) && h > 0) {
+            if (h >= 2160) return '📺 4K 2160p';
+            if (h >= 1440) return '📺 2K 1440p';
+            if (h >= 1080) return '📺 1080p HD';
+            if (h >= 720) return '📺 720p HD';
+            if (h >= 480) return '📺 480p SD';
+            if (h >= 360) return '📺 360p SD';
+            if (h >= 240) return '📺 240p SD';
+            return `📺 ${h}p`;
+        }
+
+        if (qualityLevel && qualityLevel !== 'auto') {
+            const q = String(qualityLevel).toLowerCase();
+            if (q === 'hd2160' || q === 'highres') return '📺 4K 2160p';
+            if (q === 'hd1440') return '📺 2K 1440p';
+            if (q === 'hd1080') return '📺 1080p HD';
+            if (q === 'hd720') return '📺 720p HD';
+            if (q === 'large') return '📺 480p SD';
+            if (q === 'medium') return '📺 360p SD';
+            if (q === 'small') return '📺 240p SD';
+            if (q === 'tiny') return '📺 144p SD';
+        }
+
+        if (resolutionStr) {
+            const m = resolutionStr.match(/(?:x|\/)(\d{3,4})@?/);
+            if (m && m[1]) {
+                const rh = parseInt(m[1], 10);
+                if (rh >= 2160) return '📺 4K 2160p';
+                if (rh >= 1440) return '📺 2K 1440p';
+                if (rh >= 1080) return '📺 1080p HD';
+                if (rh >= 720) return '📺 720p HD';
+                if (rh >= 480) return '📺 480p SD';
+                if (rh >= 360) return '📺 360p SD';
+                return `📺 ${rh}p`;
+            }
+        }
+
+        if (Array.isArray(avQualities) && avQualities.length > 0) {
+            if (avQualities.includes('hd2160')) return '📺 4K Auto';
+            if (avQualities.includes('hd1080')) return '📺 1080p Auto';
+            if (avQualities.includes('hd720')) return '📺 720p Auto';
+        }
+
+        return '📺 1080p HD';
+    }
+
     // TrustedHTML Safe HTML Setter (Bypasses YouTube's strict CSP completely)
     let trustedPolicy = null;
     function getTrustedPolicy() {
@@ -737,6 +785,8 @@
             category: '',
             country: 'India (IN)',
             maxQuality: 'HD 1080p',
+            playingQuality: '📺 1080p HD',
+            availableQualities: [],
             viewsExact: 0,
             viewsFormatted: '0',
             likesExact: 0,
@@ -826,6 +876,13 @@
                 else if (maxH >= 1080) data.maxQuality = '1080p Full-HD';
                 else if (maxH >= 720) data.maxQuality = '720p HD';
             }
+
+            data.availableQualities = avQ;
+            const videoEl = document.querySelector('video');
+            const vHeight = videoEl?.videoHeight || bridgeResult?.videoHeight || 0;
+            const curQ = bridgeResult?.currentQuality;
+            const resStr = bridgeResult?.stats?.resolution;
+            data.playingQuality = resolvePlayingQuality(vHeight, curQ, resStr, avQ);
 
             // Keywords
             if (Array.isArray(vd.keywords)) {
@@ -1170,6 +1227,40 @@
                     background: rgba(16, 185, 129, 0.35) !important;
                     color: #fff !important;
                 }
+                .eyvd-action-dropdown {
+                    position: absolute !important;
+                    bottom: calc(100% + 6px) !important;
+                    left: 0 !important;
+                    min-width: 250px !important;
+                    max-width: 320px !important;
+                    background: #18181b !important;
+                    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+                    border-radius: 8px !important;
+                    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+                    backdrop-filter: blur(16px) !important;
+                    z-index: 10000 !important;
+                    overflow: hidden !important;
+                    padding: 5px 0 !important;
+                    display: none;
+                    flex-direction: column !important;
+                }
+                .eyvd-dropdown-item {
+                    padding: 9px 14px !important;
+                    font-size: 12px !important;
+                    font-weight: 500 !important;
+                    color: #e2e8f0 !important;
+                    cursor: pointer !important;
+                    transition: background-color 0.15s, color 0.15s !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    user-select: none !important;
+                    text-align: left !important;
+                }
+                .eyvd-dropdown-item:hover {
+                    background: rgba(255, 255, 255, 0.12) !important;
+                    color: #fff !important;
+                }
 
                 /* Performance Stats Grid */
                 .eyvd-stats-grid {
@@ -1442,8 +1533,8 @@
                 <div class="eyvd-title-bar">
                     <span style="font-size: 18px;">📊</span>
                     <span>Video Intelligence & SEO Inspector</span>
-                    <span class="eyvd-pill eyvd-pill-success" id="eyvd-pill-quality">${meta.maxQuality}</span>
-                    <span class="eyvd-pill eyvd-pill-ping" id="eyvd-live-ping-hud">🟢 24ms • 3.2 MB/s</span>
+                    <span class="eyvd-pill eyvd-pill-success" id="eyvd-pill-quality">${meta.playingQuality || meta.maxQuality}</span>
+                    <span class="eyvd-pill eyvd-pill-ping" id="eyvd-live-ping-hud">🟢 0.0 MB/s</span>
                     <span class="eyvd-pill eyvd-pill-purple" id="eyvd-pill-hype">${meta.hypeGrade}</span>
                     <span class="eyvd-pill" id="eyvd-pill-tags-cnt">${meta.tags.length} Tags</span>
                     <span class="eyvd-pill" id="eyvd-pill-hash-cnt" style="background:rgba(6,182,212,0.16);color:#38bdf8;border-color:rgba(6,182,212,0.35);">${meta.hashtags.length} #Hashtags</span>
@@ -1606,12 +1697,36 @@
                     </div>
                 </div>
 
-                <!-- 9. Action Station (With Direct Transcript Actions) -->
-                <div class="eyvd-btn-group" style="margin-top:4px;">
+                <!-- 9. Action Station (With Extension's Original Download As & Transcript Menus) -->
+                <div class="eyvd-btn-group" style="margin-top:4px;position:relative;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <!-- 1. Original Download As Dropdown Button (Consistent with panel) -->
+                    <div style="position:relative;display:inline-block;" id="eyvd-download-as-container">
+                        <button class="eyvd-btn" id="eyvd-btn-download-as" style="background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.38);color:#34d399;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                            <span>📥 Download As</span>
+                            <span style="font-size:9px;">▼</span>
+                        </button>
+                        <div id="eyvd-download-as-dropdown" class="eyvd-action-dropdown" style="display:none;"></div>
+                    </div>
+
+                    <!-- 2. Original Transcript Dropdown Button (Consistent with panel) -->
+                    <div style="position:relative;display:inline-block;" id="eyvd-transcript-menu-container">
+                        <button class="eyvd-btn" id="eyvd-btn-transcript-menu" style="background:rgba(168,85,247,0.18);border-color:rgba(168,85,247,0.38);color:#c084fc;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                            <span>📄 Transcript</span>
+                            <span style="font-size:9px;">▼</span>
+                        </button>
+                        <div id="eyvd-transcript-dropdown" class="eyvd-action-dropdown" style="display:none;">
+                            <div class="eyvd-dropdown-item" data-action="copy" data-ts="true">📋 Copy with Timestamps</div>
+                            <div class="eyvd-dropdown-item" data-action="copy" data-ts="false">📋 Copy without Timestamps</div>
+                            <div class="eyvd-dropdown-item" data-action="download" data-ts="true">📥 Download TXT (with Timestamps)</div>
+                            <div class="eyvd-dropdown-item" data-action="download" data-ts="false">📥 Download TXT (without Timestamps)</div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Copy Clean Description -->
                     <button class="eyvd-btn" id="eyvd-btn-copy-desc">📝 Copy Clean Description</button>
+
+                    <!-- 4. Copy Complete Metadata Bundle -->
                     <button class="eyvd-btn" id="eyvd-btn-copy-all" style="background:rgba(59,130,246,0.2);border-color:rgba(59,130,246,0.4);color:#93c5fd;font-weight:600;">📦 Copy Complete Metadata Bundle</button>
-                    <button class="eyvd-btn" id="eyvd-btn-copy-transcript" style="background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.38);color:#34d399;font-weight:600;">📄 Copy Transcript</button>
-                    <button class="eyvd-btn" id="eyvd-btn-download-transcript" style="background:rgba(168,85,247,0.18);border-color:rgba(168,85,247,0.38);color:#c084fc;font-weight:600;">📥 Download Transcript (.TXT)</button>
                 </div>
             </div>
         `);
@@ -1741,50 +1856,165 @@
             };
         }
 
-        // Copy Transcript Handler
-        const copyTranscriptBtn = panel.querySelector('#eyvd-btn-copy-transcript');
-        if (copyTranscriptBtn) {
-            copyTranscriptBtn.onclick = async function () {
-                const orig = this.textContent;
-                this.textContent = '⏳ Fetching...';
-                const text = await fetchTranscriptDirect(meta.id);
-                if (text) {
-                    copyText(text, this, '✓ Transcript Copied!');
+        // Action Station: Extension's Original Download As & Transcript Dropdown Menus
+        const dlAsBtn = panel.querySelector('#eyvd-btn-download-as');
+        const dlAsDropdown = panel.querySelector('#eyvd-download-as-dropdown');
+        const transcriptBtn = panel.querySelector('#eyvd-btn-transcript-menu');
+        const transcriptDropdown = panel.querySelector('#eyvd-transcript-dropdown');
+
+        function populateDownloadAsDropdown() {
+            if (!dlAsDropdown) return;
+            while (dlAsDropdown.firstChild) dlAsDropdown.removeChild(dlAsDropdown.firstChild);
+
+            let formats = [];
+            try {
+                const raw = sessionStorage.getItem('dList_' + meta.id);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed.VideoData)) {
+                        formats = parsed.VideoData;
+                    }
+                }
+            } catch (e) { }
+
+            if (formats.length > 0) {
+                formats.forEach((f, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'eyvd-dropdown-item';
+                    let icon = '🎬';
+                    if (String(f.format || '').includes('mp3')) icon = '🎵';
+                    item.textContent = `${icon} ${f.label || f.format}`;
+                    item.onclick = (e) => {
+                        e.stopPropagation();
+                        dlAsDropdown.style.display = 'none';
+                        const orgLink = document.getElementById(`ytdl_link_${f.format}_${idx}`) || document.querySelector(`[data-format="${f.format}"]`);
+                        if (orgLink) {
+                            orgLink.click();
+                        } else if (f.url) {
+                            const a = document.createElement('a');
+                            a.href = f.url;
+                            if (f.download) a.download = f.download;
+                            a.target = '_blank';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+                    };
+                    dlAsDropdown.appendChild(item);
+                });
+            } else {
+                const defaultOptions = [
+                    { label: '🎵 MP3 Audio (High Quality 256k)', format: 'mp3256' },
+                    { label: '🎵 MP3 Audio (Standard 128k)', format: 'mp3128' },
+                    { label: '🎬 MP4 Video (1080p Full-HD)', format: '1080' },
+                    { label: '🎬 MP4 Video (720p HD)', format: '720' },
+                    { label: '🎬 MP4 Video (360p SD)', format: '360' }
+                ];
+                defaultOptions.forEach(opt => {
+                    const item = document.createElement('div');
+                    item.className = 'eyvd-dropdown-item';
+                    item.textContent = opt.label;
+                    item.onclick = (e) => {
+                        e.stopPropagation();
+                        dlAsDropdown.style.display = 'none';
+                        const orgBtn = document.getElementById('ytdl_btn');
+                        if (orgBtn) {
+                            orgBtn.click();
+                        } else {
+                            alert('Video formats initializing... Please play video for 2 seconds.');
+                        }
+                    };
+                    dlAsDropdown.appendChild(item);
+                });
+            }
+
+            const thumbItem = document.createElement('div');
+            thumbItem.className = 'eyvd-dropdown-item';
+            thumbItem.style.borderTop = '1px solid rgba(255,255,255,0.08)';
+            thumbItem.textContent = '🖼️ 4K / HD Video Thumbnail';
+            thumbItem.onclick = (e) => {
+                e.stopPropagation();
+                dlAsDropdown.style.display = 'none';
+                triggerThumbnailDownload(meta.id, meta.title);
+            };
+            dlAsDropdown.appendChild(thumbItem);
+        }
+
+        if (dlAsBtn && dlAsDropdown) {
+            dlAsBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (transcriptDropdown) transcriptDropdown.style.display = 'none';
+                const isOpen = dlAsDropdown.style.display === 'flex';
+                if (isOpen) {
+                    dlAsDropdown.style.display = 'none';
                 } else {
-                    this.textContent = '⚠️ No Transcript Available';
-                    setTimeout(() => { this.textContent = orig; }, 2500);
+                    populateDownloadAsDropdown();
+                    dlAsDropdown.style.display = 'flex';
                 }
             };
         }
 
-        // Download Transcript Handler
-        const dlTranscriptBtn = panel.querySelector('#eyvd-btn-download-transcript');
-        if (dlTranscriptBtn) {
-            dlTranscriptBtn.onclick = async function () {
-                const orig = this.textContent;
-                this.textContent = '⏳ Preparing...';
-                const text = await fetchTranscriptDirect(meta.id);
-                if (text) {
-                    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-                    const blobUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = blobUrl;
-                    const cleanName = (meta.title || 'video').replace(/[^a-zA-Z0-9 _-]/g, '').trim().substring(0, 40);
-                    a.download = `${cleanName}_transcript.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(blobUrl);
-                    }, 1500);
-                    this.textContent = '✓ Downloaded!';
-                    setTimeout(() => { this.textContent = orig; }, 2500);
-                } else {
-                    this.textContent = '⚠️ No Transcript Available';
-                    setTimeout(() => { this.textContent = orig; }, 2500);
-                }
+        if (transcriptBtn && transcriptDropdown) {
+            transcriptBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (dlAsDropdown) dlAsDropdown.style.display = 'none';
+                const isOpen = transcriptDropdown.style.display === 'flex';
+                transcriptDropdown.style.display = isOpen ? 'none' : 'flex';
             };
+
+            transcriptDropdown.querySelectorAll('.eyvd-dropdown-item').forEach(item => {
+                item.onclick = async function (e) {
+                    e.stopPropagation();
+                    transcriptDropdown.style.display = 'none';
+                    const action = this.getAttribute('data-action');
+                    const withTs = this.getAttribute('data-ts') === 'true';
+
+                    if (window.eyvdExtractAndHandleTranscript) {
+                        window.eyvdExtractAndHandleTranscript(action, withTs);
+                    } else {
+                        const orig = transcriptBtn.innerHTML;
+                        transcriptBtn.innerHTML = '<span>⏳ Processing...</span>';
+                        const text = await fetchTranscriptDirect(meta.id);
+                        if (text) {
+                            let processedText = text;
+                            if (!withTs) {
+                                processedText = text.replace(/\[\d+:\d+\]\s*/g, '');
+                            }
+                            if (action === 'copy') {
+                                copyText(processedText, transcriptBtn, '✓ Transcript Copied!');
+                            } else {
+                                const blob = new Blob([processedText], { type: 'text/plain;charset=utf-8' });
+                                const blobUrl = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = blobUrl;
+                                const cleanName = (meta.title || 'video').replace(/[^a-zA-Z0-9 _-]/g, '').trim().substring(0, 40);
+                                a.download = `${cleanName}${withTs ? '_timestamped' : ''}_transcript.txt`;
+                                document.body.appendChild(a);
+                                a.click();
+                                setTimeout(() => {
+                                    document.body.removeChild(a);
+                                    URL.revokeObjectURL(blobUrl);
+                                    transcriptBtn.innerHTML = orig;
+                                }, 1500);
+                            }
+                        } else {
+                            transcriptBtn.innerHTML = '<span>⚠️ No Transcript</span>';
+                            setTimeout(() => { transcriptBtn.innerHTML = orig; }, 2500);
+                        }
+                    }
+                };
+            });
         }
+
+        const onDocClick = (e) => {
+            if (!e.target.closest('#eyvd-download-as-container') && dlAsDropdown) {
+                dlAsDropdown.style.display = 'none';
+            }
+            if (!e.target.closest('#eyvd-transcript-menu-container') && transcriptDropdown) {
+                transcriptDropdown.style.display = 'none';
+            }
+        };
+        document.addEventListener('click', onDocClick);
 
         // Persistent Comments & Pinned Comment Watcher
         const commentsValEl = panel.querySelector('#eyvd-stat-comments');
@@ -1811,7 +2041,6 @@
                     };
                 }
             } else if (!meta.pinnedComment && pinnedSection) {
-                // Keep hidden if strictly no pinned comment
                 pinnedSection.style.setProperty('display', 'none', 'important');
             }
         };
@@ -1838,50 +2067,97 @@
             updateCommentsAndPinned();
         }, 800);
 
-        // Gaming-Style Free Fire Live Ping & Network HUD Ticker (1500ms)
+        // Non-Fake 0.7s (700ms) Real-Time Speed & True Offline HUD Ticker
         const pingHudEl = panel.querySelector('#eyvd-live-ping-hud');
-        const pingTimer = setInterval(() => {
+        const qualityPill = panel.querySelector('#eyvd-pill-quality');
+        let tickerCount = 0;
+        let isBrowserOnline = navigator.onLine;
+
+        const handleOffline = () => {
+            isBrowserOnline = false;
+            if (pingHudEl) {
+                pingHudEl.textContent = '🔴 0.0 MB/s';
+                pingHudEl.style.color = '#ef4444';
+            }
+        };
+        const handleOnline = () => {
+            isBrowserOnline = true;
+        };
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+
+        const liveTicker = setInterval(async () => {
             if (!panel.isConnected) {
-                clearInterval(pingTimer);
+                clearInterval(liveTicker);
+                window.removeEventListener('offline', handleOffline);
+                window.removeEventListener('online', handleOnline);
+                document.removeEventListener('click', onDocClick);
                 return;
             }
+            tickerCount++;
 
-            // Request live stats from bridge
+            // 1. Request live stats from bridge
             try {
                 window.dispatchEvent(new CustomEvent('eyvd_request_live_stats'));
             } catch (e) { }
 
-            // Calculate live ping
-            let rtt = navigator.connection?.rtt;
-            if (!rtt || rtt <= 0) rtt = Math.floor(20 + Math.random() * 15);
-            let pingDot = '🟢';
-            let pingColor = '#34d399';
-            if (rtt > 120) {
-                pingDot = '🔴';
-                pingColor = '#f87171';
-            } else if (rtt > 60) {
-                pingDot = '🟡';
-                pingColor = '#fbbf24';
+            // 2. Dynamic Live Playback Quality Update
+            const videoEl = document.querySelector('video');
+            const curH = latestLiveStats?.videoHeight || videoEl?.videoHeight || 0;
+            const curQ = latestLiveStats?.currentQuality;
+            const curRes = latestLiveStats?.resolution;
+            const liveQ = resolvePlayingQuality(curH, curQ, curRes, latestLiveStats?.availableQualities || meta.availableQualities);
+            if (qualityPill && liveQ && qualityPill.textContent !== liveQ) {
+                qualityPill.textContent = liveQ;
             }
 
-            // Calculate live MB/s bandwidth
-            let speedStr = '3.4 MB/s';
+            // 3. Periodic Micro-ping (every 2.1s / 3 ticks) to ensure real internet connectivity
+            if (tickerCount % 3 === 0 && isBrowserOnline) {
+                try {
+                    const testResp = await fetch('/generate_204', { method: 'HEAD', cache: 'no-store' });
+                    if (!testResp.ok) isBrowserOnline = false;
+                } catch (e) {
+                    isBrowserOnline = false;
+                }
+            }
+
+            // 4. True Offline vs Online Speed Display
+            if (!isBrowserOnline || !navigator.onLine) {
+                if (pingHudEl) {
+                    pingHudEl.textContent = '🔴 0.0 MB/s';
+                    pingHudEl.style.color = '#ef4444';
+                }
+                return;
+            }
+
+            // Calculate instantaneous bandwidth
+            let speedMBs = 0.0;
             if (latestLiveStats?.bandwidth_kbps) {
                 const kbps = parseFloat(latestLiveStats.bandwidth_kbps);
                 if (!isNaN(kbps) && kbps > 0) {
-                    const mbs = (kbps / 8000).toFixed(1);
-                    speedStr = `${mbs} MB/s`;
+                    speedMBs = (kbps / 8000);
                 }
             } else if (navigator.connection?.downlink) {
-                const mbs = (navigator.connection.downlink / 8).toFixed(1);
-                speedStr = `${mbs} MB/s`;
+                speedMBs = (navigator.connection.downlink / 8);
+            }
+
+            // If player is fully paused and not buffering, speed is idle 0.0 MB/s
+            if (videoEl && videoEl.paused && videoEl.readyState >= 3) {
+                speedMBs = 0.0;
+            }
+
+            let dot = '🟢';
+            let color = '#34d399';
+            if (speedMBs < 0.5) {
+                dot = '🟡';
+                color = '#fbbf24';
             }
 
             if (pingHudEl) {
-                pingHudEl.textContent = `${pingDot} ${rtt}ms • ${speedStr}`;
-                pingHudEl.style.color = pingColor;
+                pingHudEl.textContent = `${dot} ${speedMBs.toFixed(1)} MB/s`;
+                pingHudEl.style.color = color;
             }
-        }, 1500);
+        }, 700);
 
         // Live IST Clock Ticker
         const clockEl = panel.querySelector('.eyvd-live-clock');
@@ -2106,8 +2382,8 @@
         }
 
         const qualityPill = panel.querySelector('#eyvd-pill-quality');
-        if (qualityPill && fresh.maxQuality) {
-            qualityPill.textContent = fresh.maxQuality;
+        if (qualityPill && (fresh.playingQuality || fresh.maxQuality)) {
+            qualityPill.textContent = fresh.playingQuality || fresh.maxQuality;
         }
 
         const hypePill = panel.querySelector('#eyvd-pill-hype');
