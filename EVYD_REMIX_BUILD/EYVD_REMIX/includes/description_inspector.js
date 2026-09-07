@@ -175,7 +175,13 @@
     }
 
     async function fetchTrueChannelCountry(channelUrl, channelId, author, desc) {
-        const targetUrl = channelUrl || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
+        let targetUrl = channelUrl || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
+        if (targetUrl) {
+            targetUrl = targetUrl.replace(/^http:\/\//i, 'https://');
+            if (targetUrl.startsWith('/')) {
+                targetUrl = `https://www.youtube.com${targetUrl}`;
+            }
+        }
         const cacheKey = targetUrl || channelId || author;
         if (!cacheKey) return 'Not Specified';
 
@@ -191,7 +197,8 @@
 
         if (targetUrl) {
             try {
-                const aboutUrl = targetUrl.endsWith('/') ? `${targetUrl}about` : `${targetUrl}/about`;
+                let aboutUrl = targetUrl.endsWith('/') ? `${targetUrl}about` : `${targetUrl}/about`;
+                aboutUrl = aboutUrl.replace(/^http:\/\//i, 'https://');
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const res = await fetch(aboutUrl, { credentials: 'omit', signal: controller.signal });
@@ -495,6 +502,18 @@
             console.error('EYVD REMIX: Copy fallback error', e);
         }
         document.body.removeChild(ta);
+    }
+
+    // Helper: Clean description text from formatting artifacts
+    function cleanDescriptionText(raw) {
+        if (!raw) return '';
+        return String(raw)
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .replace(/^[ \t]+/gm, '')
+            .replace(/[ \t]+$/gm, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
     }
 
     // Format number to compact representation (e.g. 1.2M, 45K)
@@ -1262,10 +1281,12 @@
         // 5. Clean Description Extraction
         const descEl = document.querySelector('#description-inline-expander yt-attributed-string, #description-inline-expander, ytd-expandable-video-description-body-renderer, #meta-contents #description');
         if (descEl) {
-            data.description = cleanDescriptionText(descEl.textContent || '');
-            data.wordCount = (data.description.match(/\S+/g) || []).length;
-            data.charCount = data.description.length;
+            data.description = cleanDescriptionText(descEl.innerText || descEl.textContent || '');
+        } else if (pr?.videoDetails?.shortDescription) {
+            data.description = cleanDescriptionText(pr.videoDetails.shortDescription);
         }
+        data.wordCount = (data.description.match(/\S+/g) || []).length;
+        data.charCount = data.description.length;
 
         // 6. Comments count
         const numComments = extractNumericCommentsCount();
