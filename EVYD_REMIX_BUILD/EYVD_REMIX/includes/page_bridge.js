@@ -12,7 +12,20 @@
 
     console.log('[EYVD Bridge] Main page world bridge v26.0 initialized.');
 
-    function getLivePlayerData() {
+    function getCurrentUrlVideoId() {
+        try {
+            const sp = new URLSearchParams(window.location.search);
+            const v = sp.get('v');
+            if (v && v.length >= 10) return v;
+        } catch (e) { }
+        const m = window.location.href.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+        if (m && m[1].length >= 10) return m[1];
+        const sm = window.location.href.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+        if (sm) return sm[1];
+        return null;
+    }
+
+    function getLivePlayerData(targetVid) {
         let pr = null;
         let vd = null;
         let stats = null;
@@ -23,14 +36,33 @@
         let channelId = null;
         let channelUrl = null;
 
+        const reqVid = targetVid || getCurrentUrlVideoId();
+
+        // 1. Primary source: ytd-watch-flexy.playerData (Instant on SPA navigation)
+        try {
+            const flexy = document.querySelector('ytd-watch-flexy');
+            if (flexy && flexy.playerData && flexy.playerData.videoDetails) {
+                if (!reqVid || flexy.playerData.videoDetails.videoId === reqVid) {
+                    pr = flexy.playerData;
+                }
+            }
+        } catch (e) { }
+
+        // 2. Secondary source: movie_player
         try {
             const player = document.getElementById('movie_player');
             if (player) {
-                if (typeof player.getPlayerResponse === 'function') {
-                    pr = player.getPlayerResponse();
-                }
                 if (typeof player.getVideoData === 'function') {
-                    vd = player.getVideoData();
+                    const tempVd = player.getVideoData();
+                    if (!reqVid || tempVd?.video_id === reqVid) {
+                        vd = tempVd;
+                    }
+                }
+                if (!pr && typeof player.getPlayerResponse === 'function') {
+                    const tempPr = player.getPlayerResponse();
+                    if (!reqVid || tempPr?.videoDetails?.videoId === reqVid) {
+                        pr = tempPr;
+                    }
                 }
                 if (typeof player.getStatsForNerds === 'function') {
                     stats = player.getStatsForNerds();
@@ -44,8 +76,11 @@
             }
         } catch (e) { }
 
+        // 3. Fallback: window.ytInitialPlayerResponse
         if (!pr && window.ytInitialPlayerResponse) {
-            pr = window.ytInitialPlayerResponse;
+            if (!reqVid || window.ytInitialPlayerResponse.videoDetails?.videoId === reqVid) {
+                pr = window.ytInitialPlayerResponse;
+            }
         }
 
         if (pr) {
@@ -53,29 +88,11 @@
             channelUrl = pr.microformat?.playerMicroformatRenderer?.ownerProfileUrl || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
         }
 
-        // Extract TRUE channel country from ytInitialData (channel about / view model)
+        // Fast zero-overhead subscriber extraction from DOM or playerData
         try {
-            if (window.ytInitialData) {
-                const dataStr = JSON.stringify(window.ytInitialData);
-                const mCountry = dataStr.match(/"channelAboutFullMetadataRenderer":\s*\{[^}]+"country":\s*\{\s*"simpleText":\s*"([^"]+)"/i)
-                              || dataStr.match(/"aboutChannelViewModel":\s*\{[^}]+"country":\s*"([^"]+)"/i)
-                              || dataStr.match(/"channelMetadataRenderer":\s*\{[^}]+"country":\s*"([^"]+)"/i);
-                if (mCountry && mCountry[1]) {
-                    channelCountry = mCountry[1].trim();
-                }
-            }
-        } catch (e) { }
-
-        // Extract subscribers from ytInitialData
-        try {
-            if (window.ytInitialData) {
-                const dataStr = JSON.stringify(window.ytInitialData);
-                const m = dataStr.match(/"subscriberCountText":\s*\{\s*"accessibility":\s*\{\s*"accessibilityData":\s*\{\s*"label":\s*"([^"]+)"/i)
-                       || dataStr.match(/"subscriberCountText":\s*\{\s*"simpleText":\s*"([^"]+)"/i)
-                       || dataStr.match(/"([0-9.,KMBkmb]+\s+subscribers?)"/i);
-                if (m && m[1]) {
-                    subscribers = m[1].replace(/subscribers?/i, '').trim();
-                }
+            const subEl = document.querySelector('#owner-sub-count, yt-formatted-string#owner-sub-count, ytd-video-owner-renderer #owner-sub-count');
+            if (subEl && (subEl.innerText || subEl.textContent)) {
+                subscribers = (subEl.innerText || subEl.textContent).replace(/subscribers?/i, '').trim();
             }
         } catch (e) { }
 
@@ -83,11 +100,12 @@
     }
 
     function dispatchData(source, targetVid) {
-        const data = getLivePlayerData();
+        const reqVid = targetVid || getCurrentUrlVideoId();
+        const data = getLivePlayerData(reqVid);
         const currentVid = data.vd?.video_id || data.pr?.videoDetails?.videoId;
 
-        // If targetVid specified and player hasn't updated yet, wait briefly
-        if (targetVid && currentVid !== targetVid) {
+        // If targetVid specified and player hasn't updated to it yet, do not send stale data
+        if (reqVid && currentVid !== reqVid) {
             return false;
         }
 
@@ -140,13 +158,13 @@
 
     // Listen for requests from isolated world (description_inspector.js)
     window.addEventListener('eyvd_request_player_data', (e) => {
-        const reqVid = e.detail?.videoId;
+        const reqVid = e.detail?.videoId || getCurrentUrlVideoId();
         let attempts = 0;
         const checkAndSend = () => {
             attempts++;
             const sent = dispatchData('request', reqVid);
             if (!sent && attempts < 25) {
-                setTimeout(checkAndSend, 120);
+                setTimeout(checkAndSend, 100);
             }
         };
         checkAndSend();
@@ -192,22 +210,24 @@
     // Auto-listen to YouTube SPA lifecycle events
     window.addEventListener('yt-navigate-finish', () => {
         attachQualityListener();
+        const nextVid = getCurrentUrlVideoId();
         let attempts = 0;
         const poll = () => {
             attempts++;
-            const data = getLivePlayerData();
-            if (data.pr && data.pr.videoDetails?.videoId) {
-                dispatchData('yt-navigate-finish');
+            const data = getLivePlayerData(nextVid);
+            if (data.pr && data.pr.videoDetails?.videoId === nextVid) {
+                dispatchData('yt-navigate-finish', nextVid);
             } else if (attempts < 20) {
-                setTimeout(poll, 150);
+                setTimeout(poll, 100);
             }
         };
-        setTimeout(poll, 100);
+        setTimeout(poll, 50);
     });
 
     window.addEventListener('yt-page-data-updated', () => {
         attachQualityListener();
-        dispatchData('yt-page-data-updated');
+        const curVid = getCurrentUrlVideoId();
+        dispatchData('yt-page-data-updated', curVid);
     });
 
 })();
