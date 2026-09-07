@@ -236,12 +236,18 @@
     // Note: Channel Location native badge and Return YouTube Dislike native button & ratio bar
     // are powered directly by the official bundled scripts (channel_location_content.js & return_youtube_dislike.js)
 
-    // Convert any rounded subscriber text (11.6 million, 59.2M) or raw digits (134567890) into exact formatted count
+    // Convert any rounded subscriber text (11.6 million, 59.2M, 11,6 млн), regional formats (crore, lakh) or raw digits (134567890) into exact formatted count
     function formatExactSubscribers(subStr) {
         if (!subStr) return '';
-        let str = String(subStr).replace(/subscribers?/i, '').trim();
-        const lower = str.toLowerCase();
+        let str = String(subStr).replace(/subscribers?/i, '').replace(/подписчик[^\s]*/i, '').replace(/abonn[^\s]*/i, '').trim();
+        let lower = str.toLowerCase();
         let count = 0;
+
+        // Normalize comma as decimal separator in foreign numbers (e.g. 11,6M or 11,6 млн)
+        if (/^[0-9]+,[0-9]{1,2}\s*[a-zA-Z\u0400-\u04FF]/.test(str)) {
+            str = str.replace(',', '.');
+            lower = str.toLowerCase();
+        }
 
         if (/^[0-9,.\s]+$/.test(str) && !str.includes('k') && !str.includes('m') && !str.includes('b')) {
             const cleanDigits = str.replace(/[^0-9]/g, '');
@@ -251,11 +257,11 @@
         }
 
         if (!count) {
-            if (lower.includes('billion') || /\b[0-9.]+b\b/.test(lower)) {
-                const m = lower.match(/([0-9.]+)\s*(?:billion|b)/);
+            if (lower.includes('billion') || /\b[0-9.]+b\b/.test(lower) || lower.includes('млрд')) {
+                const m = lower.match(/([0-9.]+)\s*(?:billion|b|млрд)/);
                 if (m) count = Math.round(parseFloat(m[1]) * 1000000000);
-            } else if (lower.includes('million') || /\b[0-9.]+m\b/.test(lower)) {
-                const m = lower.match(/([0-9.]+)\s*(?:million|m)/);
+            } else if (lower.includes('million') || /\b[0-9.]+m\b/.test(lower) || lower.includes('млн')) {
+                const m = lower.match(/([0-9.]+)\s*(?:million|m|млн)/);
                 if (m) count = Math.round(parseFloat(m[1]) * 1000000);
             } else if (lower.includes('crore') || /\b[0-9.]+cr\b/.test(lower)) {
                 const m = lower.match(/([0-9.]+)\s*(?:crore|cr)/);
@@ -263,8 +269,8 @@
             } else if (lower.includes('lakh') || lower.includes('lac')) {
                 const m = lower.match(/([0-9.]+)\s*(?:lakh|lac)/);
                 if (m) count = Math.round(parseFloat(m[1]) * 100000);
-            } else if (lower.includes('thousand') || /\b[0-9.]+k\b/.test(lower)) {
-                const m = lower.match(/([0-9.]+)\s*(?:thousand|k)/);
+            } else if (lower.includes('thousand') || /\b[0-9.]+k\b/.test(lower) || lower.includes('тыс')) {
+                const m = lower.match(/([0-9.]+)\s*(?:thousand|k|тыс)/);
                 if (m) count = Math.round(parseFloat(m[1]) * 1000);
             }
         }
@@ -273,6 +279,118 @@
             return `${count.toLocaleString()} Subscribers`;
         }
         return str ? (str.toLowerCase().includes('sub') ? str : `${str} Subscribers`) : '';
+    }
+
+    // Anti-stale DOM subscriber extraction: guarantees DOM belongs to current channel before reading
+    function extractDomSubscribers(expectedAuthor, expectedChannelId) {
+        try {
+            const owner = document.querySelector('ytd-video-owner-renderer, #owner');
+            if (!owner) return null;
+
+            const domAuthorEl = owner.querySelector('ytd-channel-name a, #channel-name a, a.yt-formatted-string');
+            const domAuthor = domAuthorEl?.textContent?.trim()?.toLowerCase() || '';
+            const expAuthor = (expectedAuthor || '').trim().toLowerCase();
+            const domHref = domAuthorEl?.getAttribute('href') || '';
+            const expChannelId = (expectedChannelId || '').trim();
+
+            // Strict channel matching: prevent pulling previous video's channel subscriber count!
+            if (expAuthor && domAuthor && expAuthor !== domAuthor && (!expChannelId || !domHref.includes(expChannelId))) {
+                return null;
+            }
+
+            // 1. Try Polymer properties on custom element
+            const polymerSub = owner.data?.subscriberCountText?.simpleText ||
+                               owner.data?.subscriberCountText?.runs?.[0]?.text ||
+                               owner.__data?.subscriberCountText?.simpleText ||
+                               owner.__data?.subscriberCountText?.runs?.[0]?.text;
+            if (polymerSub) {
+                return String(polymerSub).trim();
+            }
+
+            // 2. Query DOM sub element
+            const subEl = owner.querySelector('#owner-sub-count, yt-formatted-string#owner-sub-count');
+            if (subEl && (subEl.innerText || subEl.textContent)) {
+                const txt = (subEl.innerText || subEl.textContent).trim();
+                if (txt && !txt.toLowerCase().includes('subscribing') && !txt.toLowerCase().includes('joined')) {
+                    return txt;
+                }
+            }
+        } catch (e) { }
+        return null;
+    }
+
+    // RYD (Return YouTube Dislike) In-Memory Cache & Non-Blocking Async Hydration Engine
+    const rydCache = new Map();
+
+    function applyRydData(data, ryd) {
+        if (!ryd) return;
+        if (ryd.dislikes !== undefined) data.dislikesFormatted = formatCompact(ryd.dislikes);
+        if (ryd.likes !== undefined) {
+            data.likesExact = ryd.likes;
+            data.likesFormatted = formatCompact(ryd.likes);
+        }
+        if (ryd.rating) data.ratingScore = Number(ryd.rating).toFixed(2) + ' ★';
+        if (ryd.viewCount && !data.viewsExact) {
+            data.viewsExact = ryd.viewCount;
+            data.viewsFormatted = formatCompact(ryd.viewCount);
+        }
+
+        const l = ryd.likes || data.likesExact || 0;
+        const d = ryd.dislikes || 0;
+        const v = data.viewsExact || ryd.viewCount || 1;
+
+        const posRate = (l + d > 0) ? ((l / (l + d)) * 100).toFixed(1) : '99.0';
+        data.positiveSentiment = `${posRate}% 👍`;
+
+        let ratingLevel = 'Very High Approval';
+        const rNum = parseFloat(ryd.rating) || 4.9;
+        if (rNum >= 4.75) ratingLevel = 'Exceptional Acclaim (Universal Praise)';
+        else if (rNum >= 4.5) ratingLevel = 'Very High Community Approval';
+        else if (rNum >= 4.0) ratingLevel = 'Positive / Strongly Recommended';
+        else if (rNum >= 3.5) ratingLevel = 'Moderate / Mixed Reaction';
+        else ratingLevel = 'Critical / High Dislike Ratio';
+        data.ratingLevel = ratingLevel;
+        data.ratingTooltip = `Rating Level: ${ratingLevel} (${data.positiveSentiment} Approval) • Formula: [Likes ÷ (Likes + Dislikes)] × 5 • Data: Real-time Return YouTube Dislike (RYD) API`;
+
+        const engagementRate = ((l / v) * 100);
+        data.hypeScore = engagementRate.toFixed(2) + '%';
+        if (engagementRate >= 8) data.hypeGrade = '🔥 Viral Hype';
+        else if (engagementRate >= 3) data.hypeGrade = '⚡ Strong Hype';
+        else data.hypeGrade = '📈 Steady';
+    }
+
+    function updateRydDom(panel, data) {
+        if (!panel || !panel.isConnected) return;
+        const dislikesEl = panel.querySelector('#eyvd-stat-dislikes');
+        if (dislikesEl && data.dislikesFormatted && data.dislikesFormatted !== '...') dislikesEl.textContent = data.dislikesFormatted;
+
+        const likesExactEl = panel.querySelector('#eyvd-stat-likes-exact');
+        if (likesExactEl && data.likesExact) {
+            likesExactEl.textContent = `${Number(data.likesExact).toLocaleString()} exact`;
+        }
+
+        const ratingEl = panel.querySelector('#eyvd-stat-rating');
+        if (ratingEl && data.ratingScore && data.ratingScore !== '...') ratingEl.textContent = data.ratingScore;
+
+        const sentimentEl = panel.querySelector('#eyvd-stat-sentiment');
+        if (sentimentEl && data.positiveSentiment && data.positiveSentiment !== '...') sentimentEl.textContent = data.positiveSentiment;
+
+        const hypeEl = panel.querySelector('#eyvd-stat-hype');
+        if (hypeEl && data.hypeScore && data.hypeScore !== '...') hypeEl.textContent = data.hypeScore;
+
+        const hypeGradeEl = panel.querySelector('#eyvd-stat-hype-grade');
+        if (hypeGradeEl && data.hypeGrade && data.hypeGrade !== 'Analyzing') hypeGradeEl.textContent = data.hypeGrade;
+
+        const hypePill = panel.querySelector('#eyvd-pill-hype');
+        if (hypePill && data.hypeGrade) {
+            hypePill.textContent = data.hypeGrade;
+            hypePill.setAttribute('data-tooltip', `Viral Hype Grade: ${data.hypeGrade} (${data.hypeScore} engagement)`);
+        }
+
+        const ratingCard = panel.querySelector('#eyvd-stat-card-rating');
+        if (ratingCard && data.ratingTooltip) {
+            ratingCard.setAttribute('data-tooltip', data.ratingTooltip);
+        }
     }
 
     function resolvePlayingQuality(height, qualityLevel, resolutionStr, avQualities) {
@@ -574,7 +692,7 @@
         } catch (e) { }
     }
 
-    function requestBridgeData(vid, timeoutMs = 700) {
+    function requestBridgeData(vid, timeoutMs = 120) {
         return new Promise((resolve) => {
             if (latestBridgeData && latestBridgeData.videoId === vid) {
                 return resolve(latestBridgeData);
@@ -1032,7 +1150,7 @@
         let pr = null;
         let bridgeResult = null;
         try {
-            bridgeResult = await requestBridgeData(vid, 750);
+            bridgeResult = await requestBridgeData(vid, 120);
             if (bridgeResult && bridgeResult.videoId === vid && bridgeResult.playerResponse) {
                 pr = bridgeResult.playerResponse;
             }
@@ -1120,18 +1238,38 @@
             if (authorEl && authorEl.textContent) data.author = authorEl.textContent.trim();
         }
 
-        // Subscriber Count Extraction - Formatted with exact integer count (e.g. 11,600,000 or 134,567,890)
-        let rawSub = bridgeResult?.subscribers || null;
-        if (!rawSub) {
-            const subEl = document.querySelector('#owner-sub-count, yt-formatted-string#owner-sub-count, ytd-video-owner-renderer #owner-sub-count');
-            if (subEl && (subEl.innerText || subEl.textContent)) {
-                rawSub = (subEl.innerText || subEl.textContent).trim();
+        // Anti-Stale Channel Subscriber Count Extraction
+        // 1. Cross-check DOM first to ensure it matches current video's author
+        let rawSub = extractDomSubscribers(data.author, data.channelId);
+        // 2. If DOM isn't ready or hasn't rendered yet, check bridge (only if bridge author matches current author)
+        if (!rawSub && bridgeResult?.subscribers) {
+            const bridgeAuthor = (bridgeResult.author || bridgeResult.playerResponse?.videoDetails?.author || '').trim().toLowerCase();
+            const currentAuthor = (data.author || '').trim().toLowerCase();
+            if (!bridgeAuthor || !currentAuthor || bridgeAuthor === currentAuthor) {
+                rawSub = bridgeResult.subscribers;
             }
         }
         data.subscriberCount = formatExactSubscribers(rawSub);
 
-        // True Channel Country Resolution (from cache, about page, or multi-tier signal inference)
-        data.country = await fetchTrueChannelCountry(data.channelUrl, data.channelId, data.author, data.description);
+        // True Channel Country Resolution (Instant from Memory Cache / Signal Inference)
+        const countryCacheKey = data.channelUrl || (data.channelId ? `https://www.youtube.com/channel/${data.channelId}` : null) || data.channelId || data.author;
+        const quickCountry = channelCountryCache.get(countryCacheKey) || inferCountryFromSignals(data.author, data.description, data.channelUrl);
+        data.country = quickCountry || 'Global (Worldwide)';
+
+        // Non-blocking async country fetch in background if not in memory cache
+        if (!channelCountryCache.has(countryCacheKey) && (data.channelUrl || data.channelId)) {
+            fetchTrueChannelCountry(data.channelUrl, data.channelId, data.author, data.description).then(resolved => {
+                if (resolved && resolved !== 'Not Specified' && resolved !== data.country) {
+                    data.country = resolved;
+                    const p = document.getElementById('eyvd-seo-inspector-panel');
+                    if (p && p.getAttribute('data-video-id') === vid) {
+                        if (p._meta) p._meta.country = resolved;
+                        const countryEl = p.querySelector('#eyvd-panel-channel-country');
+                        if (countryEl) countryEl.textContent = resolved;
+                    }
+                }
+            }).catch(() => {});
+        }
 
         // Upload ISO date fallback from JSON-LD or meta
         if (!data.uploadDateIso) {
@@ -1234,57 +1372,33 @@
         data.infoCards = cardPack.infoCards;
         data.playlistInfo = cardPack.playlistInfo;
 
-        // 9. Live Dislikes & Sentiment from Free Return YouTube Dislike API
-        try {
+        // 9. Live Dislikes & Sentiment from Free Return YouTube Dislike API (Instant Non-Blocking Async)
+        if (rydCache.has(vid)) {
+            applyRydData(data, rydCache.get(vid));
+        } else {
             const cleanVid = encodeURIComponent(vid);
-            const rydResp = await fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${cleanVid}`, { cache: 'no-cache' });
-            if (rydResp.ok) {
-                const ryd = await rydResp.json();
-                if (ryd) {
-                    if (ryd.dislikes !== undefined) data.dislikesFormatted = formatCompact(ryd.dislikes);
-                    if (ryd.likes !== undefined) {
-                        data.likesExact = ryd.likes;
-                        data.likesFormatted = formatCompact(ryd.likes);
+            fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${cleanVid}`, { cache: 'no-cache' })
+                .then(r => r.ok ? r.json() : null)
+                .then(ryd => {
+                    if (ryd) {
+                        rydCache.set(vid, ryd);
+                        applyRydData(data, ryd);
+                        const p = document.getElementById('eyvd-seo-inspector-panel');
+                        if (p && p.getAttribute('data-video-id') === vid) {
+                            if (p._meta) Object.assign(p._meta, data);
+                            updateRydDom(p, data);
+                        }
                     }
-                    if (ryd.rating) data.ratingScore = Number(ryd.rating).toFixed(2) + ' ★';
-                    if (ryd.viewCount && !data.viewsExact) {
-                        data.viewsExact = ryd.viewCount;
-                        data.viewsFormatted = formatCompact(ryd.viewCount);
-                    }
-
-                    const l = ryd.likes || data.likesExact || 0;
-                    const d = ryd.dislikes || 0;
-                    const v = data.viewsExact || ryd.viewCount || 1;
-
-                    const posRate = (l + d > 0) ? ((l / (l + d)) * 100).toFixed(1) : '99.0';
-                    data.positiveSentiment = `${posRate}% 👍`;
-
-                    // Rating Level Description & Tooltip based on standard approval benchmarks
-                    let ratingLevel = 'Very High Approval';
-                    const rNum = parseFloat(ryd.rating) || 4.9;
-                    if (rNum >= 4.75) ratingLevel = 'Exceptional Acclaim (Universal Praise)';
-                    else if (rNum >= 4.5) ratingLevel = 'Very High Community Approval';
-                    else if (rNum >= 4.0) ratingLevel = 'Positive / Strongly Recommended';
-                    else if (rNum >= 3.5) ratingLevel = 'Moderate / Mixed Reaction';
-                    else ratingLevel = 'Critical / High Dislike Ratio';
-                    data.ratingLevel = ratingLevel;
-                    data.ratingTooltip = `Rating Level: ${ratingLevel} (${data.positiveSentiment} Approval) • Formula: [Likes ÷ (Likes + Dislikes)] × 5 • Data: Real-time Return YouTube Dislike (RYD) API`;
-
-                    const engagementRate = ((l / v) * 100);
-                    data.hypeScore = engagementRate.toFixed(2) + '%';
-                    if (engagementRate >= 8) data.hypeGrade = '🔥 Viral Hype';
-                    else if (engagementRate >= 3) data.hypeGrade = '⚡ Strong Hype';
-                    else data.hypeGrade = '📈 Steady';
-                }
-            }
-        } catch (e) {
-            data.dislikesFormatted = 'N/A';
-            data.ratingScore = '4.9 ★';
-            data.ratingLevel = 'Exceptional Acclaim (Universal Praise)';
-            data.ratingTooltip = 'Rating Level: Exceptional Acclaim (98% Approval) • Formula: [Likes ÷ (Likes + Dislikes)] × 5 • Data: Return YouTube Dislike (RYD) API';
-            data.positiveSentiment = '98% 👍';
-            data.hypeScore = '6.4%';
-            data.hypeGrade = '⚡ Strong Hype';
+                })
+                .catch(() => {
+                    data.dislikesFormatted = 'N/A';
+                    data.ratingScore = '4.9 ★';
+                    data.ratingLevel = 'Exceptional Acclaim (Universal Praise)';
+                    data.ratingTooltip = 'Rating Level: Exceptional Acclaim (98% Approval) • Formula: [Likes ÷ (Likes + Dislikes)] × 5 • Data: Return YouTube Dislike (RYD) API';
+                    data.positiveSentiment = '98% 👍';
+                    data.hypeScore = '6.4%';
+                    data.hypeGrade = '⚡ Strong Hype';
+                });
         }
 
         return data;
@@ -1586,6 +1700,7 @@
         const panel = document.createElement('div');
         panel.id = 'eyvd-seo-inspector-panel';
         panel.setAttribute('data-video-id', meta.id);
+        panel._meta = meta;
 
         // Memory: Remember whether the user collapsed or expanded the panel
         let isSavedCollapsed = false;
@@ -2838,14 +2953,14 @@
         const copyDescBtn = panel.querySelector('#eyvd-btn-copy-desc');
         if (copyDescBtn) {
             copyDescBtn.onclick = function () {
-                copyText(meta.description, this);
+                copyText((panel._meta || meta).description, this);
             };
         }
 
         const copyAllBtn = panel.querySelector('#eyvd-btn-copy-all');
         if (copyAllBtn) {
             copyAllBtn.onclick = function () {
-                const bundle = generateAsciiMetadataBundle(meta);
+                const bundle = generateAsciiMetadataBundle(panel._meta || meta);
                 copyText(bundle, this, '✓ Complete Bundle Copied!');
             };
         }
@@ -2938,23 +3053,23 @@
     let isInjectingInspector = false;
     let currentInjectingVid = null;
 
-    // Multi-Stage Reconfirmation Engine (1.5s & 4s)
+    // Multi-Stage Reconfirmation Engine (1s & 3.2s)
     let reconfirmTimer = null;
     function scheduleReconfirm(vid) {
         if (!vid) return;
         if (reconfirmTimer) clearTimeout(reconfirmTimer);
-        // Stage 1: Quick verification at 1500ms
+        // Stage 1: Quick verification at 1000ms once DOM owner settles
         setTimeout(() => {
             if (getVideoId() === vid) reconfirmAndRefreshPanel(vid);
-        }, 1500);
+        }, 1000);
 
-        // Stage 2: Deep post-play verification at 3800ms
+        // Stage 2: Deep post-play verification at 3200ms
         reconfirmTimer = setTimeout(async () => {
             const currentVid = getVideoId();
             if (currentVid !== vid) return;
-            console.log(`[EYVD REMIX] Running 4-second post-play reconfirmation for: ${vid}...`);
+            console.log(`[EYVD REMIX] Running 3.2-second post-play reconfirmation for: ${vid}...`);
             await reconfirmAndRefreshPanel(vid);
-        }, 3800);
+        }, 3200);
     }
 
     function attachVideoPlayListener(vid) {
@@ -3002,7 +3117,7 @@
         if (ratingEl && fresh.ratingScore && fresh.ratingScore !== '...') ratingEl.textContent = fresh.ratingScore;
 
         const sentimentEl = panel.querySelector('#eyvd-stat-sentiment');
-        if (sentimentEl && fresh.positiveSentiment) sentimentEl.textContent = fresh.positiveSentiment;
+        if (sentimentEl && fresh.positiveSentiment && fresh.positiveSentiment !== '...') sentimentEl.textContent = fresh.positiveSentiment;
 
         const hypeEl = panel.querySelector('#eyvd-stat-hype');
         if (hypeEl && fresh.hypeScore && fresh.hypeScore !== '...') hypeEl.textContent = fresh.hypeScore;
@@ -3061,6 +3176,12 @@
             setSafeHTML(titleLabel, `Video Title (${tLen} chars • <span style="color:${badgeCol}">${badgeTxt}</span>)`);
         }
 
+        // Anti-stale DOM subscriber re-extraction: verify live DOM author matches current video
+        const liveSub = extractDomSubscribers(fresh.author, fresh.channelId);
+        if (liveSub) {
+            fresh.subscriberCount = formatExactSubscribers(liveSub);
+        }
+
         // Channel header update with exact subscribers and true country
         const channelHdr = panel.querySelector('#eyvd-panel-channel-hdr');
         if (channelHdr && fresh.author) {
@@ -3071,6 +3192,7 @@
             fetchTrueChannelCountry(fresh.channelUrl, fresh.channelId, fresh.author, fresh.description).then(resolved => {
                 if (resolved && panel.isConnected) {
                     fresh.country = resolved;
+                    if (panel._meta) panel._meta.country = resolved;
                     const countryEl = panel.querySelector('#eyvd-panel-channel-country');
                     if (countryEl) countryEl.textContent = resolved;
                 }
@@ -3132,6 +3254,9 @@
         } else if (pinnedSection) {
             pinnedSection.style.setProperty('display', 'none', 'important');
         }
+
+        // Sync panel metadata reference for copy bundle
+        panel._meta = Object.assign(panel._meta || {}, fresh);
 
         panel.setAttribute('data-reconfirmed', 'true');
         console.log(`[EYVD REMIX] Reconfirmation complete: video ${vid} details 100% verified & fresh.`);
@@ -3239,7 +3364,7 @@
                 lastKnownVid = currentVid;
                 // Immediate purge of previous video's panel
                 document.querySelectorAll('#eyvd-seo-inspector-panel').forEach(p => p.remove());
-                setTimeout(injectInspectorPanel, 100);
+                setTimeout(injectInspectorPanel, 50);
             }
         }, 200);
 
@@ -3288,14 +3413,14 @@
             document.querySelectorAll('#eyvd-seo-inspector-panel').forEach(p => {
                 if (p.getAttribute('data-video-id') !== vid) p.remove();
             });
-            setTimeout(injectInspectorPanel, 150);
+            setTimeout(injectInspectorPanel, 50);
             scheduleReconfirm(vid);
         });
 
         window.addEventListener('yt-page-data-updated', () => {
             const vid = getVideoId();
             if (!vid) return;
-            setTimeout(injectInspectorPanel, 150);
+            setTimeout(injectInspectorPanel, 50);
             scheduleReconfirm(vid);
         });
     }

@@ -88,11 +88,35 @@
             channelUrl = pr.microformat?.playerMicroformatRenderer?.ownerProfileUrl || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
         }
 
-        // Fast zero-overhead subscriber extraction from DOM or playerData
+        // Fast zero-overhead subscriber extraction from DOM or playerData with ANTI-STALE CHANNEL CHECK
         try {
-            const subEl = document.querySelector('#owner-sub-count, yt-formatted-string#owner-sub-count, ytd-video-owner-renderer #owner-sub-count');
-            if (subEl && (subEl.innerText || subEl.textContent)) {
-                subscribers = (subEl.innerText || subEl.textContent).replace(/subscribers?/i, '').trim();
+            const currentAuthor = (pr?.videoDetails?.author || vd?.author || '').trim().toLowerCase();
+            const currentChId = channelId || pr?.videoDetails?.channelId || vd?.channel_id || '';
+            const ownerRenderer = document.querySelector('ytd-video-owner-renderer, #owner');
+
+            if (ownerRenderer) {
+                // Check if the DOM channel name / channelId matches current video author
+                const domAuthorEl = ownerRenderer.querySelector('ytd-channel-name a, #channel-name a, a.yt-formatted-string');
+                const domAuthor = domAuthorEl?.textContent?.trim()?.toLowerCase() || '';
+                const domHref = domAuthorEl?.getAttribute('href') || '';
+
+                const isAuthorMatch = !currentAuthor || !domAuthor || domAuthor === currentAuthor || (currentChId && domHref.includes(currentChId));
+
+                if (isAuthorMatch) {
+                    // Try Polymer properties first
+                    const polymerSub = ownerRenderer.data?.subscriberCountText?.simpleText ||
+                                       ownerRenderer.data?.subscriberCountText?.runs?.[0]?.text ||
+                                       ownerRenderer.__data?.subscriberCountText?.simpleText ||
+                                       ownerRenderer.__data?.subscriberCountText?.runs?.[0]?.text;
+                    if (polymerSub) {
+                        subscribers = String(polymerSub).replace(/subscribers?/i, '').trim();
+                    } else {
+                        const subEl = ownerRenderer.querySelector('#owner-sub-count, yt-formatted-string#owner-sub-count');
+                        if (subEl && (subEl.innerText || subEl.textContent)) {
+                            subscribers = (subEl.innerText || subEl.textContent).replace(/subscribers?/i, '').trim();
+                        }
+                    }
+                }
             }
         } catch (e) { }
 
@@ -109,6 +133,8 @@
             return false;
         }
 
+        const currentAuthor = data.pr?.videoDetails?.author || data.vd?.author || null;
+
         const payload = {
             source: source || 'auto',
             videoId: currentVid,
@@ -120,7 +146,8 @@
             channelCountry: data.channelCountry,
             subscribers: data.subscribers,
             channelId: data.channelId,
-            channelUrl: data.channelUrl
+            channelUrl: data.channelUrl,
+            author: currentAuthor
         };
 
         try {
@@ -145,7 +172,8 @@
                     channelCountry: data.channelCountry,
                     subscribers: data.subscribers,
                     channelId: data.channelId,
-                    channelUrl: data.channelUrl
+                    channelUrl: data.channelUrl,
+                    author: currentAuthor
                 });
                 window.dispatchEvent(new CustomEvent('eyvd_player_data_response_str', {
                     detail: safePayload
