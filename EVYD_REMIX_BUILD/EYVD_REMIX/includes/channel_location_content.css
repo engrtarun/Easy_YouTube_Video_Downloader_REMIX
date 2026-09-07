@@ -1,0 +1,58 @@
+/* Standard YouTube styling for all labels */
+div.ytdc-channel-country-name-container {
+  background: var(--yt-spec-additive-background);
+  border-radius: 14px;
+  display: inline-block;
+  margin-left: 5px;
+  margin-right: 5px;
+  padding: 0px 6px;
+  font-size: 85%;
+  vertical-align: baseline;
+}
+
+div.ytdc-channel-country-name-container p {
+  text-transform: uppercase;
+  color: var(--yt-spec-text-primary);
+  text-align: center;
+  white-space: nowrap;
+  margin: 0;
+}
+
+/* Dark mode styling */
+div.ytdc-channel-country-name-container.dark {
+  background-color: #ffffff1a;
+}
+
+div.ytdc-channel-country-name-container.dark p {
+  color: rgb(241, 241, 241);
+}
+
+/* Shorts-specific styling - underneath positioning with higher specificity */
+div.ytdc-channel-country-name-container.underneath {
+  display: block !important;
+  margin: 1px 0 0 0 !important;
+  text-align: left !important;
+  width: fit-content !important;
+  font-size: 12px !important;
+  padding: 1px 0px 1px 0px !important;
+  border-radius: 8px !important;
+  position: relative !important;
+  left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Wrapper for channel name + country in shorts */
+.ytdc-channel-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 1px !important;
+  margin-left: 12px !important;
+}
+
+/* Ensure channel name and country label have consistent alignment */
+.ytdc-channel-wrapper > span.ytReelChannelBarViewModelChannelName,
+.ytdc-channel-wrapper > .ytdc-channel-country-name-container {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}

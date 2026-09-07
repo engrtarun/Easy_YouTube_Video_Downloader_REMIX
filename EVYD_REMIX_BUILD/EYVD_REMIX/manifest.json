@@ -51,6 +51,32 @@
       "css": [
         "includes/youtube-video-downloader.css"
       ]
+    },
+    {
+      "js": [
+        "includes/channel_location_content.js"
+      ],
+      "css": [
+        "includes/channel_location_content.css"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "js": [
+        "includes/return_youtube_dislike.js"
+      ],
+      "matches": [
+        "*://youtube.com/*",
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*"
+      ],
+      "exclude_matches": [
+        "*://*.music.youtube.com/*"
+      ],
+      "run_at": "document_start"
     }
   ],
   "options_ui": {

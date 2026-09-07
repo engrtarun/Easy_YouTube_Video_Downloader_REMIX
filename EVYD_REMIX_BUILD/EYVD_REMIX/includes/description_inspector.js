@@ -233,103 +233,8 @@
         return fallback;
     }
 
-    // Native Channel Country Badge Injection (Ported from ChennalLocation)
-    function injectNativeChannelLocationBadge(country) {
-        if (!country || country === 'Not Specified') return;
-        try {
-            let existing = document.querySelector('.ytdc-channel-country-name-container');
-            if (existing) {
-                existing.textContent = `📍 ${country}`;
-                return;
-            }
-
-            const targetSelectors = [
-                'ytd-video-owner-renderer #upload-info ytd-channel-name ytd-badge-supported-renderer',
-                'ytd-video-owner-renderer #upload-info ytd-channel-name',
-                '#channel-name ytd-badge-supported-renderer',
-                '#channel-name #text-container'
-            ];
-
-            for (const sel of targetSelectors) {
-                const targetEl = document.querySelector(sel);
-                if (targetEl) {
-                    const badge = document.createElement('span');
-                    badge.className = 'ytdc-channel-country-name-container';
-                    badge.style.cssText = `
-                        background: rgba(56, 189, 248, 0.12) !important;
-                        border: 1px solid rgba(56, 189, 248, 0.35) !important;
-                        border-radius: 12px !important;
-                        display: inline-flex !important;
-                        align-items: center !important;
-                        margin-left: 8px !important;
-                        padding: 1.5px 8px !important;
-                        font-size: 11px !important;
-                        font-weight: 600 !important;
-                        vertical-align: middle !important;
-                        color: #38bdf8 !important;
-                        white-space: nowrap !important;
-                        line-height: 1.35 !important;
-                        user-select: none !important;
-                    `;
-                    badge.textContent = `📍 ${country}`;
-                    badge.title = `Creator Country: ${country}`;
-                    if (targetEl.parentElement) {
-                        targetEl.parentElement.insertBefore(badge, targetEl.nextSibling);
-                    } else {
-                        targetEl.appendChild(badge);
-                    }
-                    break;
-                }
-            }
-        } catch (e) { }
-    }
-
-    // Native Dislike Button & Ratio Bar Injection (Ported from Return YouTube Dislike)
-    let lastInjectedDislikes = 0;
-    let lastInjectedLikes = 0;
-    function injectNativeDislikeAndRatioBar(likes, dislikes) {
-        if (dislikes === undefined || dislikes === null || isNaN(Number(dislikes))) return;
-        lastInjectedDislikes = Number(dislikes);
-        if (likes) lastInjectedLikes = Number(likes);
-
-        try {
-            const dislikeBtn = document.querySelector('dislike-button-view-model button, #segmented-dislike-button button, #dislike-button button, button[aria-label*="Dislike" i]');
-            if (dislikeBtn) {
-                let textSpan = dislikeBtn.querySelector('.eyvd-native-dislike-text');
-                if (!textSpan) {
-                    textSpan = document.createElement('span');
-                    textSpan.className = 'eyvd-native-dislike-text';
-                    textSpan.style.cssText = 'margin-left: 6px !important; font-size: 13.5px !important; font-weight: 500 !important; vertical-align: middle !important; color: inherit !important; display: inline-block !important;';
-                    dislikeBtn.appendChild(textSpan);
-                    dislikeBtn.style.width = 'auto';
-                }
-                textSpan.textContent = formatCompact(lastInjectedDislikes);
-            }
-
-            // Ratio sentiment bar under top-level buttons
-            const btnBar = document.querySelector('#top-level-buttons-computed, #segmented-like-button')?.parentElement;
-            if (btnBar && lastInjectedLikes > 0) {
-                const total = lastInjectedLikes + lastInjectedDislikes;
-                const likePercent = total > 0 ? ((lastInjectedLikes / total) * 100).toFixed(1) : '98.0';
-                let barWrap = document.getElementById('eyvd-ratio-bar-wrap');
-                if (!barWrap) {
-                    barWrap = document.createElement('div');
-                    barWrap.id = 'eyvd-ratio-bar-wrap';
-                    barWrap.style.cssText = 'width: 100% !important; height: 2.5px !important; background: rgba(239, 68, 68, 0.85) !important; border-radius: 2px !important; margin-top: 5px !important; overflow: hidden !important; position: relative !important;';
-                    barWrap.title = `${Number(lastInjectedLikes).toLocaleString()} Likes / ${Number(lastInjectedDislikes).toLocaleString()} Dislikes (${likePercent}% Approval)`;
-                    const bar = document.createElement('div');
-                    bar.id = 'eyvd-ratio-bar';
-                    bar.style.cssText = `width: ${likePercent}% !important; height: 100% !important; background: #10b981 !important; border-radius: 2px !important; transition: width 0.3s ease !important;`;
-                    barWrap.appendChild(bar);
-                    btnBar.appendChild(barWrap);
-                } else {
-                    const bar = barWrap.querySelector('#eyvd-ratio-bar');
-                    if (bar) bar.style.width = `${likePercent}%`;
-                    barWrap.title = `${Number(lastInjectedLikes).toLocaleString()} Likes / ${Number(lastInjectedDislikes).toLocaleString()} Dislikes (${likePercent}% Approval)`;
-                }
-            }
-        } catch (e) { }
-    }
+    // Note: Channel Location native badge and Return YouTube Dislike native button & ratio bar
+    // are powered directly by the official bundled scripts (channel_location_content.js & return_youtube_dislike.js)
 
     // Convert any rounded subscriber text (11.6 million, 59.2M) or raw digits (134567890) into exact formatted count
     function formatExactSubscribers(subStr) {
@@ -1227,7 +1132,6 @@
 
         // True Channel Country Resolution (from cache, about page, or multi-tier signal inference)
         data.country = await fetchTrueChannelCountry(data.channelUrl, data.channelId, data.author, data.description);
-        injectNativeChannelLocationBadge(data.country);
 
         // Upload ISO date fallback from JSON-LD or meta
         if (!data.uploadDateIso) {
@@ -1351,9 +1255,6 @@
                     const l = ryd.likes || data.likesExact || 0;
                     const d = ryd.dislikes || 0;
                     const v = data.viewsExact || ryd.viewCount || 1;
-
-                    // Inject live count into YouTube's native Dislike button & ratio sentiment bar
-                    injectNativeDislikeAndRatioBar(l, d);
 
                     const posRate = (l + d > 0) ? ((l / (l + d)) * 100).toFixed(1) : '99.0';
                     data.positiveSentiment = `${posRate}% 👍`;
@@ -3166,19 +3067,12 @@
             setSafeHTML(channelHdr, `Channel: <strong style="color:#fff;">${fresh.author || 'Creator'}</strong> ${fresh.subscriberCount ? `<span style="color:#c084fc;font-weight:600;" id="eyvd-panel-subscribers">• ${fresh.subscriberCount}</span>` : ''} • ${fresh.category || 'General'} • <strong style="color:#38bdf8;" id="eyvd-panel-channel-country">${fresh.country}</strong>`);
         }
 
-        // Reconfirm Native Channel Badge and Dislike Count
-        injectNativeChannelLocationBadge(fresh.country);
-        if (fresh.likesExact || fresh.dislikesExact) {
-            injectNativeDislikeAndRatioBar(fresh.likesExact, fresh.dislikesExact);
-        }
-
         if (fresh.country === 'Global (Worldwide)' && fresh.channelUrl) {
             fetchTrueChannelCountry(fresh.channelUrl, fresh.channelId, fresh.author, fresh.description).then(resolved => {
                 if (resolved && panel.isConnected) {
                     fresh.country = resolved;
                     const countryEl = panel.querySelector('#eyvd-panel-channel-country');
                     if (countryEl) countryEl.textContent = resolved;
-                    injectNativeChannelLocationBadge(resolved);
                 }
             });
         }
